@@ -62,7 +62,7 @@ export function GamePage() {
         if (!session || !poll || actionPending)
             return;
         const gs = poll.state;
-        const myNum = poll.myRole === "p1" ? 1 : 2;
+        const myNum = poll.myRole ?? (session.role === "p1" ? 1 : 2);
         const budget = myNum === 1 ? gs.p1Budget : gs.p2Budget;
         const cents = toC(bidInput || "0");
         if (cents <= gs.currentBid) {
@@ -125,7 +125,7 @@ export function GamePage() {
         return (_jsxs("div", { style: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }, children: [_jsx("div", { style: s.connectingDot }), _jsx("span", { style: { fontSize: 13, color: "var(--white-dim)", marginLeft: 10 }, children: "Connecting\u2026" })] }));
     }
     const gs = poll.state;
-    const myNum = poll.myRole === "p1" ? 1 : 2;
+    const myNum = poll.myRole ?? (session.role === "p1" ? 1 : 2);
     const myColor = myNum === 1 ? "var(--gold)" : "var(--accent)";
     const isMyTurn = gs.phase === "bidding" && gs.biddingTurn === myNum;
     const myBudget = myNum === 1 ? gs.p1Budget : gs.p2Budget;

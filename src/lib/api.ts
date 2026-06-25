@@ -10,7 +10,7 @@ export interface GameSession {
 
 export interface PollResponse {
   state: GameState;
-  myRole: "p1" | "p2" | null;
+  myRole: 1 | 2 | null;
   joinCode: string;
 }
 
