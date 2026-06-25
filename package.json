@@ -8,10 +8,14 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "worker:dev": "wrangler dev worker/index.ts --local",
+    "setup:local": "wrangler d1 execute highest-bid-db --local --file=./migrations/001_init.sql && wrangler d1 execute highest-bid-db --local --file=./migrations/002_multiplayer.sql",
+    "dev:full": "(trap 'kill 0' INT; wrangler dev worker/index.ts --local & vite)",
     "worker:deploy": "wrangler deploy worker/index.ts",
     "db:create": "wrangler d1 create highest-bid-db",
-    "db:migrate:local": "wrangler d1 execute highest-bid-db --local --file=./migrations/001_init.sql",
-    "db:migrate:remote": "wrangler d1 execute highest-bid-db --file=./migrations/001_init.sql"
+    "db:migrate:local": "wrangler d1 execute highest-bid-db --local --file=./migrations/001_init.sql && wrangler d1 execute highest-bid-db --local --file=./migrations/002_multiplayer.sql",
+    "db:migrate:remote": "wrangler d1 execute highest-bid-db --file=./migrations/001_init.sql && wrangler d1 execute highest-bid-db --file=./migrations/002_multiplayer.sql",
+    "db:migrate2:local": "wrangler d1 execute highest-bid-db --local --file=./migrations/002_multiplayer.sql",
+    "db:migrate2:remote": "wrangler d1 execute highest-bid-db --file=./migrations/002_multiplayer.sql"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.120.20",

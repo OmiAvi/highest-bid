@@ -81,18 +81,18 @@ export const POSITION_LABELS: Record<Position, string> = {
 };
 
 export const POSITION_COLORS: Record<Position, string> = {
-  PG: "#3B82F6",
+  PG: "#5E6AD2",
   SG: "#8B5CF6",
   SF: "#10B981",
-  PF: "#F59E0B",
-  C:  "#EF4444",
+  PF: "#D97706",
+  C:  "#64748B",
 };
 
 export const TIER_COLORS: Record<NBAPlayer["tier"], string> = {
-  superstar: "#FFB800",
+  superstar: "#F59E0B",
   allstar:   "#60A5FA",
   starter:   "#A78BFA",
-  role:      "#6B7280",
+  role:      "#64748B",
 };
 
 export function pickRandomPlayer(exclude: string[] = []): NBAPlayer {

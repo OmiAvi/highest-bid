@@ -69,15 +69,27 @@ npm run db:migrate:remote  # push to production D1
 npm run worker:deploy
 ```
 
+Copy the deployed Worker URL, for example:
+
+```text
+https://highest-bid-worker.<your-subdomain>.workers.dev
+```
+
 ### 5. Deploy the Frontend
 
 ```bash
+# Point the frontend to your deployed Worker API
+export VITE_API_BASE="https://highest-bid-worker.<your-subdomain>.workers.dev/api"
+
 npm run build
 # Upload dist/ to Cloudflare Pages, Vercel, Netlify, etc.
 
 # Or deploy to Cloudflare Pages:
 npx wrangler pages deploy dist --project-name=highest-bid
 ```
+
+If you deploy via the Cloudflare Pages dashboard, add `VITE_API_BASE` as a Pages environment variable
+in both Preview and Production, then trigger a new deployment.
 
 ---
 

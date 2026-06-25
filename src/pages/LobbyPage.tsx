@@ -1,111 +1,132 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { createGame, genId } from "../lib/game";
+import { createGame, joinGame, saveSession } from "../lib/api";
+
+type Tab = "create" | "join";
 
 export function LobbyPage() {
   const nav = useNavigate();
-  const [p1, setP1] = useState("");
-  const [p2, setP2] = useState("");
+  const [tab, setTab] = useState<Tab>("create");
+  const [name, setName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function start(e: React.FormEvent) {
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    const id = genId();
-    const state = createGame(id, p1.trim() || "Player 1", p2.trim() || "Player 2");
-    sessionStorage.setItem(`hb-${id}`, JSON.stringify(state));
-    nav({ to: "/game/$gameId", params: { gameId: id } });
+    setLoading(true); setError("");
+    try {
+      const { gameId, joinCode: code, token } = await createGame(name.trim() || "Player 1");
+      saveSession(gameId, { role: "p1", token, playerName: name.trim() || "Player 1" });
+      nav({ to: "/game/$gameId", params: { gameId } });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create game");
+    } finally { setLoading(false); }
   }
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!joinCode.trim()) { setError("Enter a join code"); return; }
+    setLoading(true); setError("");
+    try {
+      const { gameId, token } = await joinGame(joinCode.trim(), name.trim() || "Player 2");
+      saveSession(gameId, { role: "p2", token, playerName: name.trim() || "Player 2" });
+      nav({ to: "/game/$gameId", params: { gameId } });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to join");
+    } finally { setLoading(false); }
+  }
+
+  const isCreate = tab === "create";
 
   return (
     <div style={s.page}>
-      {/* Court lines BG */}
-      <svg style={s.bg} viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
-        <circle cx="400" cy="300" r="220" fill="none" stroke="#C17B3D" strokeWidth="2" opacity="0.06"/>
-        <circle cx="400" cy="300" r="60"  fill="none" stroke="#C17B3D" strokeWidth="2" opacity="0.06"/>
-        <line x1="0" y1="300" x2="800" y2="300" stroke="#C17B3D" strokeWidth="2" opacity="0.06"/>
-        <path d="M0,500 Q400,180 800,500" fill="none" stroke="#C17B3D" strokeWidth="2" opacity="0.06"/>
-      </svg>
+      {/* Subtle mesh gradient */}
+      <div style={s.mesh} />
 
       <div style={s.wrap}>
-        {/* Hero */}
-        <div style={s.hero}>
-          <div style={s.gavel}>🔨</div>
-          <h1 style={s.title}>HIGHEST BID</h1>
-          <p style={s.sub}>NBA DRAFT AUCTION</p>
-          <div style={s.pills}>
-            <Pill>$20 Budget Each</Pill>
-            <Pill>Sealed Simultaneous Bids</Pill>
-            <Pill>Build Your Best 5</Pill>
-          </div>
+        {/* Wordmark */}
+        <div style={s.header}>
+          <div style={s.logoText}>Highest Bid</div>
+          <div style={s.tagline}>NBA Draft Auction</div>
         </div>
 
-        {/* Rules card */}
+        {/* How to play */}
         <div style={s.card}>
-          <div style={s.cardLabel}>HOW TO PLAY</div>
-          {[
-            ["01", "A random NBA starter is revealed each round"],
-            ["02", "Both players privately enter their bid from their $20 budget"],
-            ["03", "Bids lock in — then both are revealed simultaneously"],
-            ["04", "Highest bid wins the player for their PG/SG/SF/PF/C slot"],
-            ["05", "Fill your 5-man lineup and compare rosters to find the champion"],
-          ].map(([n, rule]) => (
-            <div key={n} style={s.rule}>
-              <span style={s.ruleN}>{n}</span>
-              <span style={s.ruleT}>{rule}</span>
-            </div>
-          ))}
+          <div style={s.cardLabel}>How it works</div>
+          <div style={s.rules}>
+            {[
+              "One player creates a game and shares the 6-letter join code",
+              "A random NBA player is put up for auction each round",
+              "Players take turns bidding — raise or pass",
+              "Pass and the current leader wins the player",
+              "Fill your PG · SG · SF · PF · C slots with the best team",
+            ].map((rule, i) => (
+              <div key={i} style={s.rule}>
+                <span style={s.ruleN}>{String(i + 1).padStart(2, "0")}</span>
+                <span style={s.ruleT}>{rule}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={start} style={s.form}>
-          <div style={s.inputs}>
-            <PlayerInput
-              num={1} value={p1} onChange={setP1} color="var(--gold)"
-            />
-            <div style={s.vs}>VS</div>
-            <PlayerInput
-              num={2} value={p2} onChange={setP2} color="var(--accent)"
-            />
+        {/* Create / Join form */}
+        <div style={s.card}>
+          {/* Tabs */}
+          <div style={s.tabs}>
+            <button style={{ ...s.tab, ...(isCreate ? s.tabActive : {}) }} onClick={() => { setTab("create"); setError(""); }}>
+              Create game
+            </button>
+            <button style={{ ...s.tab, ...(!isCreate ? s.tabActive : {}) }} onClick={() => { setTab("join"); setError(""); }}>
+              Join with code
+            </button>
           </div>
-          <button type="submit" style={s.btn}>
-            START AUCTION 🏀
-          </button>
-        </form>
+
+          {isCreate ? (
+            <form onSubmit={handleCreate} style={s.form}>
+              <label style={s.label}>Your name</label>
+              <input
+                style={s.input}
+                placeholder="Player 1"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                maxLength={20}
+                autoFocus
+              />
+              {error && <div style={s.errMsg}>{error}</div>}
+              <button type="submit" style={s.btnPrimary} disabled={loading}>
+                {loading ? "Creating…" : "Create game"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleJoin} style={s.form}>
+              <label style={s.label}>Join code</label>
+              <input
+                style={{ ...s.input, ...s.codeInput }}
+                placeholder="ABCXYZ"
+                value={joinCode}
+                onChange={e => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+                maxLength={6}
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus
+              />
+              <label style={s.label}>Your name</label>
+              <input
+                style={s.input}
+                placeholder="Player 2"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                maxLength={20}
+              />
+              {error && <div style={s.errMsg}>{error}</div>}
+              <button type="submit" style={{ ...s.btnPrimary, background: "var(--accent)" }} disabled={loading}>
+                {loading ? "Joining…" : "Join game"}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function Pill({ children }: { children: string }) {
-  return (
-    <span style={{
-      background: "rgba(255,184,0,0.1)", border: "1px solid rgba(255,184,0,0.22)",
-      color: "var(--gold)", borderRadius: 100, padding: "4px 13px",
-      fontSize: 11, fontWeight: 600, letterSpacing: "0.05em",
-    }}>{children}</span>
-  );
-}
-
-function PlayerInput({ num, value, onChange, color }: {
-  num: 1 | 2; value: string; onChange: (v: string) => void; color: string;
-}) {
-  return (
-    <div style={{
-      flex: 1, display: "flex", alignItems: "center", gap: 10,
-      background: "var(--court-surface)", border: "1px solid var(--border)",
-      borderRadius: 10, padding: "11px 14px",
-    }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: 7, background: color,
-        color: "#000", fontFamily: "var(--font-d)", fontWeight: 900, fontSize: 15,
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      }}>P{num}</div>
-      <input
-        style={{ background: "none", border: "none", color: "var(--white)", fontSize: 15, fontWeight: 500, width: "100%", minWidth: 0 }}
-        placeholder={`Player ${num} name`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={20}
-      />
     </div>
   );
 }
@@ -113,46 +134,76 @@ function PlayerInput({ num, value, onChange, color }: {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    padding: "32px 16px", position: "relative", overflow: "hidden",
+    padding: "40px 16px", position: "relative",
   },
-  bg: { position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" },
+  mesh: {
+    position: "absolute", inset: 0, pointerEvents: "none",
+    background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(94,106,210,0.08) 0%, transparent 100%)",
+  },
   wrap: {
-    width: "100%", maxWidth: 520, display: "flex", flexDirection: "column",
-    gap: 22, position: "relative", zIndex: 1, animation: "fadeUp 0.5s ease",
+    width: "100%", maxWidth: 480, display: "flex", flexDirection: "column",
+    gap: 16, position: "relative", zIndex: 1, animation: "fadeUp 0.3s ease-out",
   },
-  hero: { textAlign: "center" },
-  gavel: {
-    fontSize: 56, display: "block", marginBottom: 10,
-    animation: "gavel 2.4s ease-in-out infinite", transformOrigin: "bottom right",
+  header: { marginBottom: 4, textAlign: "center" as const },
+  logoText: {
+    fontFamily: "var(--font-d)", fontSize: 48, fontWeight: 800,
+    color: "var(--white)", letterSpacing: "-0.03em", lineHeight: 1.05,
+    marginBottom: 8,
   },
-  title: {
-    fontFamily: "var(--font-d)", fontSize: 80, fontWeight: 900,
-    letterSpacing: "0.04em", lineHeight: 1, color: "var(--gold)",
-    textShadow: "0 0 60px rgba(255,184,0,0.2)",
+  tagline: {
+    fontSize: 20, color: "var(--white-dim)", fontWeight: 500, letterSpacing: "0.01em",
   },
-  sub: {
-    fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 600,
-    letterSpacing: "0.35em", color: "var(--white-dim)", marginTop: 4, marginBottom: 14,
-  },
-  pills: { display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" },
   card: {
     background: "var(--court-surface)", border: "1px solid var(--border)",
-    borderRadius: 12, padding: "18px 22px", display: "flex", flexDirection: "column", gap: 10,
+    borderRadius: 12, padding: "20px",
   },
   cardLabel: {
-    fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 700,
-    letterSpacing: "0.22em", color: "var(--white-dim)", marginBottom: 4,
+    fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
+    color: "var(--white-dim)", textTransform: "uppercase" as const, marginBottom: 14,
   },
-  rule: { display: "flex", alignItems: "flex-start", gap: 12 },
-  ruleN: { fontFamily: "var(--font-d)", fontSize: 20, fontWeight: 900, color: "var(--gold)", lineHeight: 1, width: 24, flexShrink: 0 },
-  ruleT: { fontSize: 13.5, color: "var(--white)", lineHeight: 1.5 },
-  form: { display: "flex", flexDirection: "column", gap: 14 },
-  inputs: { display: "flex", alignItems: "center", gap: 10 },
-  vs: { fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 900, color: "var(--white-dim)", flexShrink: 0 },
-  btn: {
-    background: "var(--gold)", color: "#000",
-    fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 800, letterSpacing: "0.05em",
-    padding: "16px 32px", borderRadius: 10, border: "none",
-    animation: "pulseGold 2.5s infinite",
+  rules: { display: "flex", flexDirection: "column", gap: 10 },
+  rule: { display: "flex", alignItems: "baseline", gap: 12 },
+  ruleN: {
+    fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700,
+    color: "var(--gold)", minWidth: 22, letterSpacing: "0.02em",
+  },
+  ruleT: { fontSize: 13, color: "var(--white-dim)", lineHeight: 1.5 },
+  tabs: {
+    display: "flex", gap: 2, marginBottom: 20,
+    background: "var(--court-mid)", borderRadius: 8, padding: 3,
+  },
+  tab: {
+    flex: 1, padding: "7px 12px", borderRadius: 6,
+    fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600,
+    color: "var(--white-dim)", background: "transparent", border: "none",
+    transition: "all 150ms ease-out",
+  },
+  tabActive: {
+    background: "var(--court-surface)", color: "var(--white)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+  },
+  form: { display: "flex", flexDirection: "column", gap: 8 },
+  label: { fontSize: 12, fontWeight: 500, color: "var(--white-dim)", marginBottom: 2 },
+  input: {
+    background: "var(--court-mid)", border: "1px solid var(--border-strong)",
+    borderRadius: 7, padding: "9px 12px",
+    color: "var(--white)", fontSize: 14, fontWeight: 500,
+    transition: "border-color 150ms ease-out",
+  },
+  codeInput: {
+    fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 700,
+    letterSpacing: "0.16em", color: "var(--accent)",
+  },
+  errMsg: {
+    fontSize: 12, color: "#F87171",
+    background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)",
+    borderRadius: 6, padding: "8px 12px",
+  },
+  btnPrimary: {
+    marginTop: 4, padding: "10px 16px",
+    background: "var(--gold)", color: "#fff",
+    fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600,
+    letterSpacing: "0.02em", borderRadius: 7, border: "none",
+    transition: "opacity 150ms ease-out",
   },
 };

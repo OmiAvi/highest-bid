@@ -11,62 +11,69 @@ interface Props {
 
 export function RosterPanel({ name, slots, budget, num }: Props) {
   const color = num === 1 ? "var(--gold)" : "var(--accent)";
-  const bg    = num === 1 ? "var(--gold)" : "var(--accent)";
+  const filledCount = slots.filter(s => s.playerName).length;
 
   return (
     <div style={{
-      background: "var(--court-surface)", border: "1px solid var(--border)",
+      border: "1px solid var(--border)",
       borderRadius: 10, overflow: "hidden",
     }}>
       {/* Header */}
       <div style={{
-        padding: "12px 14px", background: "rgba(0,0,0,0.3)",
+        padding: "10px 12px",
         borderBottom: "1px solid var(--border)",
-        display: "flex", alignItems: "center", gap: 10,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 7, background: bg,
-          color: "#000", fontFamily: "var(--font-d)", fontWeight: 900, fontSize: 14,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>P{num}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 800 }}>{name}</div>
-          <div style={{ fontSize: 11, color: "var(--white-dim)" }}>{fmt$(budget)} remaining</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: 5,
+            background: color, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "var(--font-d)", fontWeight: 700, fontSize: 11, color: "#fff",
+          }}>P{num}</div>
+          <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600, color: "var(--white)" }}>
+            {name}
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--white-dim)", fontVariantNumeric: "tabular-nums" }}>
+          {filledCount}/5 · {fmt$(budget)}
         </div>
       </div>
 
       {/* Slots */}
       {POSITIONS.map((pos) => {
         const slot = slots.find((s) => s.position === pos)!;
-        const pc   = POSITION_COLORS[pos];
+        const pc = POSITION_COLORS[pos];
         const filled = slot.playerName !== null;
 
         return (
           <div key={pos} style={{
-            display: "flex", alignItems: "center", gap: 9,
-            padding: "9px 14px", borderBottom: "1px solid rgba(255,255,255,0.03)",
-            opacity: filled ? 1 : 0.45,
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 12px",
+            borderBottom: "1px solid var(--border)",
+            opacity: filled ? 1 : 0.4,
           }}>
-            <div style={{
-              background: pc, color: "#000",
-              fontFamily: "var(--font-d)", fontWeight: 800, fontSize: 11,
-              padding: "3px 7px", borderRadius: 5, letterSpacing: "0.04em", flexShrink: 0,
-            }}>{pos}</div>
+            <span style={{
+              fontFamily: "var(--font-d)", fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.05em", color: pc, width: 22, flexShrink: 0,
+            }}>{pos}</span>
 
             {filled ? (
               <>
-                <div style={{ flex: 1, fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>
-                  {slot.playerName}
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--white-dim)", fontFamily: "var(--font-b)" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600, color: "var(--white)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {slot.playerName}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 1 }}>
                     {slot.playerTeam} · {slot.cost != null ? fmt$(slot.cost) : ""}
                   </div>
                 </div>
-                <div style={{ fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 800, color }}>
+                <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600, color, flexShrink: 0 }}>
                   {slot.stats?.rating}
                 </div>
               </>
             ) : (
-              <div style={{ flex: 1, fontSize: 13, color: "rgba(155,144,128,0.4)" }}>
+              <div style={{ flex: 1, fontSize: 12, color: "var(--white-dim)" }}>
                 {POSITION_LABELS[pos]}
               </div>
             )}

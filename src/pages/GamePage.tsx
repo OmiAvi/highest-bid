@@ -1,200 +1,360 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import type { GameState } from "../lib/game";
-import { applyBids, advanceRound, fmt$, toC, STARTING_BUDGET } from "../lib/game";
+import { fmt$, toC, STARTING_BUDGET } from "../lib/game";
 import { PlayerCard } from "../components/PlayerCard";
 import { RosterPanel } from "../components/RosterPanel";
+import { loadSession, pollGame, raiseBid, passBid, advanceRound } from "../lib/api";
+import type { GameSession, PollResponse } from "../lib/api";
+
+const POLL_MS = 1500;
 
 export function GamePage() {
   const { gameId } = useParams({ from: "/game/$gameId" });
   const nav = useNavigate();
 
-  const [gs, setGs] = useState<GameState | null>(null);
-  const [bid1, setBid1] = useState("");
-  const [bid2, setBid2] = useState("");
-  const [p1Locked, setP1Locked] = useState(false);
-  const [p2Locked, setP2Locked] = useState(false);
+  const [session, setSession] = useState<GameSession | null>(null);
+  const [poll, setPoll] = useState<PollResponse | null>(null);
+  const [bidInput, setBidInput] = useState("");
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [cardKey, setCardKey] = useState(0);
   const [rosterOpen, setRosterOpen] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const advancingRef = useRef(false);
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(`hb-${gameId}`);
-    if (!raw) { nav({ to: "/" }); return; }
-    setGs(JSON.parse(raw));
+    const sess = loadSession(gameId);
+    if (!sess) { nav({ to: "/" }); return; }
+    setSession(sess);
   }, [gameId]);
 
-  function save(next: GameState) {
-    sessionStorage.setItem(`hb-${gameId}`, JSON.stringify(next));
-    setGs(next);
-  }
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
 
-  function lockBid(player: 1 | 2) {
-    if (!gs) return;
-    const raw = player === 1 ? bid1 : bid2;
-    const budget = player === 1 ? gs.p1Budget : gs.p2Budget;
-    const cents = toC(raw || "0");
-    if (cents < 0 || cents > budget) {
-      alert(`Bid must be between $0.00 and ${fmt$(budget)}`);
-      return;
+    async function tick() {
+      if (cancelled) return;
+      try {
+        const data = await pollGame(gameId, session!.token);
+        if (cancelled) return;
+        setPoll(prev => {
+          if (prev && prev.state.round !== data.state.round) {
+            setBidInput(""); setActionError(""); setCardKey(k => k + 1);
+          }
+          return data;
+        });
+        if (data.state.phase === "complete") {
+          nav({ to: "/results/$gameId", params: { gameId } });
+          return;
+        }
+      } catch { /* retry */ }
+      if (!cancelled) setTimeout(tick, POLL_MS);
     }
-    if (player === 1) setP1Locked(true);
-    else setP2Locked(true);
+
+    tick();
+    return () => { cancelled = true; };
+  }, [session, gameId]);
+
+  async function handleRaise(e: React.FormEvent) {
+    e.preventDefault();
+    if (!session || !poll || actionPending) return;
+    const gs = poll.state;
+    const myNum = poll.myRole === "p1" ? 1 : 2;
+    const budget = myNum === 1 ? gs.p1Budget : gs.p2Budget;
+    const cents = toC(bidInput || "0");
+    if (cents <= gs.currentBid) { setActionError(`Must exceed ${fmt$(gs.currentBid)}`); return; }
+    if (cents > budget) { setActionError(`Exceeds your budget of ${fmt$(budget)}`); return; }
+    setActionPending(true); setActionError("");
+    try { await raiseBid(gameId, session.token, cents); setBidInput(""); }
+    catch (e: unknown) { setActionError(e instanceof Error ? e.message : "Failed"); }
+    finally { setActionPending(false); }
   }
 
-  function reveal() {
-    if (!gs) return;
-    const b1 = toC(bid1 || "0");
-    const b2 = toC(bid2 || "0");
-    const next = applyBids(gs, b1, b2);
-    save(next);
-    if (next.phase === "complete") nav({ to: "/results/$gameId", params: { gameId } });
+  async function handlePass() {
+    if (!session || !poll || actionPending) return;
+    setActionPending(true); setActionError("");
+    try { await passBid(gameId, session.token); }
+    catch (e: unknown) { setActionError(e instanceof Error ? e.message : "Failed"); }
+    finally { setActionPending(false); }
   }
 
-  function nextRound() {
-    if (!gs) return;
-    const next = advanceRound(gs);
-    setBid1(""); setBid2("");
-    setP1Locked(false); setP2Locked(false);
-    setCardKey((k) => k + 1);
-    save(next);
+  async function handleAdvance() {
+    if (!session || advancingRef.current) return;
+    advancingRef.current = true;
+    try { await advanceRound(gameId, session.token); } catch { /* poll picks it up */ }
+    finally { advancingRef.current = false; }
   }
 
-  if (!gs) return <div style={{ padding: 40, color: "var(--white)" }}>Loading…</div>;
+  function copyCode() {
+    if (!poll?.joinCode) return;
+    navigator.clipboard.writeText(poll.joinCode).then(() => {
+      setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000);
+    });
+  }
 
-  const bothLocked = p1Locked && p2Locked;
+  if (!session || !poll) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={s.connectingDot} />
+        <span style={{ fontSize: 13, color: "var(--white-dim)", marginLeft: 10 }}>Connecting…</span>
+      </div>
+    );
+  }
+
+  const gs: GameState = poll.state;
+  const myNum: 1 | 2 = poll.myRole === "p1" ? 1 : 2;
+  const myColor = myNum === 1 ? "var(--gold)" : "var(--accent)";
+  const isMyTurn = gs.phase === "bidding" && gs.biddingTurn === myNum;
+  const myBudget = myNum === 1 ? gs.p1Budget : gs.p2Budget;
   const lr = gs.lastResult;
+  const minBid = gs.currentBid + 1;
+  const canRaise = myBudget > gs.currentBid;
+
+  const passHint =
+    gs.currentLeader === myNum ? "Pass — let opponent respond"
+    : gs.currentLeader !== null ? `Pass — ${gs.currentLeader === 1 ? gs.p1Name : gs.p2Name} wins at ${fmt$(gs.currentBid)}`
+    : gs.firstPassUsed ? "Pass — player goes to no one"
+    : "Pass — give opponent a chance";
 
   return (
     <div style={s.layout}>
-
-      {/* ── Sidebar ── */}
+      {/* Sidebar */}
       <aside style={s.sidebar} className="desktop-sidebar">
-        <div style={s.sidebarInner}>
-          <div style={s.sideLabel}>ROSTERS</div>
+        <div style={s.sideInner}>
+          <div style={s.sideHeader}>
+            <div style={s.logoDot} />
+            <span style={s.logoText}>Highest Bid</span>
+          </div>
+          <div style={s.sideLabel}>Rosters</div>
           <RosterPanel name={gs.p1Name} slots={gs.roster1} budget={gs.p1Budget} num={1} />
           <RosterPanel name={gs.p2Name} slots={gs.roster2} budget={gs.p2Budget} num={2} />
         </div>
       </aside>
 
-      {/* ── Mobile roster drawer ── */}
+      {/* Mobile roster drawer */}
       {rosterOpen && (
         <div style={s.overlay} onClick={() => setRosterOpen(false)}>
-          <div style={s.drawer} onClick={(e) => e.stopPropagation()}>
-            <button style={s.closeBtn} onClick={() => setRosterOpen(false)}>✕ Close</button>
-            <div style={s.sideLabel}>ROSTERS</div>
+          <div style={s.drawer} onClick={e => e.stopPropagation()}>
+            <button style={s.drawerClose} onClick={() => setRosterOpen(false)}>Close</button>
+            <div style={s.sideLabel}>Rosters</div>
             <RosterPanel name={gs.p1Name} slots={gs.roster1} budget={gs.p1Budget} num={1} />
             <RosterPanel name={gs.p2Name} slots={gs.roster2} budget={gs.p2Budget} num={2} />
           </div>
         </div>
       )}
 
-      {/* ── Main content ── */}
       <main style={s.main}>
-        {/* Top bar */}
-        <div style={s.topBar}>
-          <div style={s.roundBadge}>ROUND {gs.round}</div>
-          <div style={s.budgets}>
-            <BudgetPip name={gs.p1Name} budget={gs.p1Budget} color="var(--gold)" />
-            <span style={{ color: "var(--white-dim)", fontSize: 16 }}>·</span>
-            <BudgetPip name={gs.p2Name} budget={gs.p2Budget} color="var(--accent)" />
+        {/* Topbar */}
+        <div style={s.topbar}>
+          <div style={s.topLeft}>
+            {gs.phase === "waiting"
+              ? <span style={s.roundLabel}>Waiting room</span>
+              : <><span style={s.roundLabel}>Round {gs.round}</span>
+                  <span style={s.roundDot} />
+                  <span style={{ fontSize: 12, color: isMyTurn && gs.phase === "bidding" ? myColor : "var(--white-dim)" }}>
+                    {gs.phase === "bidding" ? (isMyTurn ? "Your turn" : "Opponent's turn") : gs.phase === "reveal" ? "Reveal" : ""}
+                  </span>
+                </>
+            }
           </div>
-          <button style={s.rosterBtn} onClick={() => setRosterOpen(true)}>📋</button>
-        </div>
-
-        {/* ─── BIDDING PHASE ─── */}
-        {gs.phase === "bidding" && gs.currentPlayer && (
-          <div style={{ animation: "fadeUp 0.35s ease", display: "flex", flexDirection: "column", gap: 20 }} key={cardKey}>
-            <div>
-              <div style={s.auctionLabel}>ON THE BLOCK</div>
-              <PlayerCard player={gs.currentPlayer} animKey={cardKey} />
-            </div>
-
-            <div style={s.bidsGrid}>
-              <BidInput
-                label={gs.p1Name} num={1} value={bid1} onChange={setBid1}
-                maxBudget={gs.p1Budget} locked={p1Locked} onLock={() => lockBid(1)}
-                color="var(--gold)"
-              />
-              <BidInput
-                label={gs.p2Name} num={2} value={bid2} onChange={setBid2}
-                maxBudget={gs.p2Budget} locked={p2Locked} onLock={() => lockBid(2)}
-                color="var(--accent)"
-              />
-            </div>
-
-            {bothLocked && (
-              <button style={s.revealBtn} onClick={reveal}>🔨 REVEAL BIDS</button>
-            )}
-
-            {!bothLocked && (
-              <div style={s.waitingMsg}>
-                {!p1Locked && !p2Locked && "Both players enter their bid — then lock in"}
-                {p1Locked && !p2Locked && `Waiting for ${gs.p2Name} to lock…`}
-                {!p1Locked && p2Locked && `Waiting for ${gs.p1Name} to lock…`}
+          <div style={s.topRight}>
+            {gs.phase !== "waiting" && (
+              <div style={s.budgetRow}>
+                <BudgetChip name={gs.p1Name} budget={gs.p1Budget} color="var(--gold)" isMe={myNum === 1} />
+                <span style={{ color: "var(--border-strong)", fontSize: 12 }}>·</span>
+                <BudgetChip name={gs.p2Name} budget={gs.p2Budget} color="var(--accent)" isMe={myNum === 2} />
               </div>
             )}
+            <button style={s.rosterToggle} onClick={() => setRosterOpen(true)}>Roster</button>
+          </div>
+        </div>
+
+        {/* ── WAITING ── */}
+        {gs.phase === "waiting" && (
+          <div style={{ animation: "fadeUp 0.3s ease-out" }}>
+            <div style={s.waitingCard}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--white-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16 }}>
+                Share this code
+              </div>
+              <div style={s.joinCodeDisplay} onClick={copyCode}>
+                <span style={s.joinCodeText}>{poll.joinCode}</span>
+                <span style={{ fontSize: 11, color: codeCopied ? "var(--gold)" : "var(--white-dim)", transition: "color 150ms" }}>
+                  {codeCopied ? "Copied" : "Click to copy"}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--white-dim)", marginTop: 16, lineHeight: 1.6 }}>
+                Your opponent opens this site and clicks <strong style={{ color: "var(--white)", fontWeight: 600 }}>Join with code</strong>.
+                The game starts automatically.
+              </div>
+            </div>
           </div>
         )}
 
-        {/* ─── REVEAL PHASE ─── */}
-        {gs.phase === "reveal" && lr && (
-          <div style={{ animation: "fadeUp 0.4s ease", display: "flex", flexDirection: "column", gap: 20 }}>
-            <div style={{ maxWidth: 400, alignSelf: "center", width: "100%" }}>
-              <PlayerCard player={lr.player} animKey={-1} />
-            </div>
+        {/* ── BIDDING ── */}
+        {gs.phase === "bidding" && gs.currentPlayer && (
+          <div style={{ animation: "fadeUp 0.25s ease-out", display: "flex", flexDirection: "column", gap: 16 }} key={cardKey}>
+            <PlayerCard player={gs.currentPlayer} animKey={cardKey} />
 
-            {/* Bid comparison */}
-            <div style={s.bidReveal}>
-              <BidResult name={gs.p1Name} bid={lr.bid1} isWinner={lr.winner === 1} color="var(--gold)" />
-              <div style={s.vsReveal}>VS</div>
-              <BidResult name={gs.p2Name} bid={lr.bid2} isWinner={lr.winner === 2} color="var(--accent)" />
-            </div>
-
-            {/* Outcome */}
-            <div style={s.outcome}>
-              {lr.winner ? (
-                <>
-                  <div style={{ fontFamily: "var(--font-d)", fontSize: 36, fontWeight: 900, color: lr.winner === 1 ? "var(--gold)" : "var(--accent)", letterSpacing: "0.04em" }}>
-                    {lr.winner === 1 ? gs.p1Name : gs.p2Name} WINS
-                  </div>
-                  {lr.slotFilled ? (
-                    <div style={{ fontSize: 13, color: "var(--white-dim)", marginTop: 4 }}>
-                      {lr.player.name} → {lr.player.position} slot for {fmt$(lr.winner === 1 ? lr.bid1 : lr.bid2)}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 13, color: "var(--accent)", marginTop: 4 }}>
-                      ⚠️ {lr.player.position} slot already filled — player is lost
-                    </div>
-                  )}
-                </>
+            {/* Current bid status */}
+            <div style={s.statusBar}>
+              {gs.currentLeader ? (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={s.currentBidAmount}>{fmt$(gs.currentBid)}</span>
+                  <span style={{ fontSize: 12, color: "var(--white-dim)" }}>
+                    led by {gs.currentLeader === myNum ? "you" : (gs.currentLeader === 1 ? gs.p1Name : gs.p2Name)}
+                    {gs.firstPassUsed ? " · opponent passed" : ""}
+                  </span>
+                </div>
               ) : (
-                <div style={{ fontFamily: "var(--font-d)", fontSize: 28, fontWeight: 800, color: "var(--white-dim)" }}>
-                  TIE — no winner, player passes
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 600, color: "var(--white-dim)" }}>
+                    No bids yet
+                  </span>
+                  {gs.firstPassUsed && (
+                    <span style={s.pill}>Opponent passed</span>
+                  )}
                 </div>
               )}
             </div>
 
-            <button style={s.nextBtn} onClick={nextRound}>NEXT PLAYER →</button>
+            {/* My turn panel */}
+            {isMyTurn && (
+              <form onSubmit={handleRaise} style={{ ...s.panel, borderColor: `${myColor.replace("var(", "").replace(")", "")} 30` }}>
+                <div style={{ borderLeft: `2px solid ${myColor === "var(--gold)" ? "var(--gold)" : "var(--accent)"}`, paddingLeft: 10, marginBottom: 14 }}>
+                  <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600, color: "var(--white)" }}>Your turn</div>
+                  <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 1 }}>
+                    Budget: {fmt$(myBudget)}{gs.currentBid > 0 ? ` · min raise ${fmt$(minBid)}` : ""}
+                  </div>
+                </div>
+
+                {canRaise && (
+                  <div style={s.bidRow}>
+                    <span style={{ fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 600, color: myColor, lineHeight: 1 }}>$</span>
+                    <input
+                      type="number"
+                      min={(minBid / 100).toFixed(2)}
+                      max={(myBudget / 100).toFixed(2)}
+                      step="0.01"
+                      value={bidInput}
+                      onChange={e => { setBidInput(e.target.value); setActionError(""); }}
+                      placeholder={`${(minBid / 100).toFixed(2)}`}
+                      autoFocus
+                      style={{
+                        ...s.bidInput,
+                        color: myColor,
+                      }}
+                    />
+                  </div>
+                )}
+
+                {!canRaise && (
+                  <div style={{ fontSize: 12, color: "#F87171", marginBottom: 12 }}>
+                    Not enough budget to raise — you must pass.
+                  </div>
+                )}
+
+                {actionError && <div style={s.errMsg}>{actionError}</div>}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  {canRaise && (
+                    <button
+                      type="submit"
+                      disabled={actionPending || !bidInput}
+                      style={{
+                        ...s.btnRaise,
+                        background: myNum === 1 ? "var(--gold)" : "var(--accent)",
+                        opacity: actionPending || !bidInput ? 0.45 : 1,
+                      }}
+                    >
+                      Raise bid
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePass}
+                    disabled={actionPending}
+                    style={{ ...s.btnPass, flex: canRaise ? "0 0 auto" : "1" }}
+                    title={passHint}
+                  >
+                    Pass
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 8 }}>{passHint}</div>
+              </form>
+            )}
+
+            {/* Waiting panel */}
+            {!isMyTurn && (
+              <div style={s.waitingTurnPanel}>
+                <div style={s.spinnerSm} />
+                <div>
+                  <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600, color: "var(--white)" }}>
+                    {gs.biddingTurn === 1 ? gs.p1Name : gs.p2Name} is deciding
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 2 }}>
+                    They can raise or pass
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* History */}
+            {gs.history.length > 0 && (
+              <div style={s.historyPanel}>
+                <div style={s.sideLabel}>Recent</div>
+                {[...gs.history].reverse().slice(0, 3).map(h => (
+                  <div key={h.id} style={s.historyRow}>
+                    <span style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600 }}>{h.playerName}</span>
+                    <span style={{ color: "var(--white-dim)" }}>·</span>
+                    {h.winner ? (
+                      <span style={{ fontSize: 12, color: h.winner === 1 ? "var(--gold)" : "var(--accent)", fontWeight: 500 }}>
+                        {h.winner === 1 ? gs.p1Name : gs.p2Name} — {fmt$(h.winningBid!)}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "var(--white-dim)" }}>No winner</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Recent log */}
-        {gs.history.length > 0 && gs.phase === "bidding" && (
-          <div style={s.log}>
-            <div style={s.logLabel}>RECENT RESULTS</div>
-            {[...gs.history].reverse().slice(0, 4).map((h) => (
-              <div key={h.id} style={s.logRow}>
-                <span style={{ fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 700 }}>{h.playerName}</span>
-                <span style={{ color: "var(--white-dim)", fontSize: 13 }}>→</span>
-                {h.winner ? (
-                  <span style={{ color: h.winner === 1 ? "var(--gold)" : "var(--accent)", fontSize: 13, fontWeight: 600 }}>
-                    {h.winner === 1 ? gs.p1Name : gs.p2Name} ({fmt$(h.winningBid!)})
+        {/* ── REVEAL ── */}
+        {gs.phase === "reveal" && lr && (
+          <div style={{ animation: "fadeUp 0.25s ease-out", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ maxWidth: 400, alignSelf: "center", width: "100%" }}>
+              <PlayerCard player={lr.player} animKey={-1} />
+            </div>
+
+            <div style={s.revealGrid}>
+              <RevealSide name={gs.p1Name} bid={lr.bid1} won={lr.winner === 1} color="var(--gold)" isMe={myNum === 1} />
+              <div style={s.vsLabel}>vs</div>
+              <RevealSide name={gs.p2Name} bid={lr.bid2} won={lr.winner === 2} color="var(--accent)" isMe={myNum === 2} />
+            </div>
+
+            <div style={s.outcomePanel}>
+              {lr.winner ? (
+                <>
+                  <span style={{ fontFamily: "var(--font-d)", fontSize: 20, fontWeight: 700, color: lr.winner === 1 ? "var(--gold)" : "var(--accent)" }}>
+                    {lr.winner === 1 ? gs.p1Name : gs.p2Name} wins
                   </span>
-                ) : (
-                  <span style={{ color: "var(--white-dim)", fontSize: 13 }}>No winner</span>
-                )}
-              </div>
-            ))}
+                  <span style={{ fontSize: 12, color: "var(--white-dim)", marginLeft: 10 }}>
+                    {lr.slotFilled
+                      ? `${lr.player.name} → ${lr.player.position} · ${fmt$(lr.winner === 1 ? lr.bid1 : lr.bid2)}`
+                      : `${lr.player.position} slot already filled — player lost`}
+                  </span>
+                </>
+              ) : (
+                <span style={{ fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 600, color: "var(--white-dim)" }}>
+                  Both passed — player skipped
+                </span>
+              )}
+            </div>
+
+            <button style={s.nextBtn} onClick={handleAdvance}>Next player</button>
           </div>
         )}
       </main>
@@ -202,114 +362,146 @@ export function GamePage() {
   );
 }
 
-/* ─────────── Sub-components ─────────── */
+/* ─── Sub-components ─── */
 
-function BudgetPip({ name, budget, color }: { name: string; budget: number; color: string }) {
+function BudgetChip({ name, budget, color, isMe }: { name: string; budget: number; color: string; isMe: boolean }) {
   const pct = budget / STARTING_BUDGET;
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 10, color: "var(--white-dim)", fontWeight: 600, letterSpacing: "0.06em", marginBottom: 1 }}>{name}</div>
-      <div style={{ fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 800, color: pct > 0.25 ? color : "var(--accent)" }}>
+      <div style={{ fontSize: 10, color: "var(--white-dim)", fontWeight: 500, marginBottom: 1 }}>{name}{isMe ? " ·you" : ""}</div>
+      <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 700, color: pct > 0.2 ? color : "#F87171" }}>
         {fmt$(budget)}
       </div>
     </div>
   );
 }
 
-function BidInput({ label, num, value, onChange, maxBudget, locked, onLock, color }: {
-  label: string; num: 1 | 2; value: string; onChange: (v: string) => void;
-  maxBudget: number; locked: boolean; onLock: () => void; color: string;
-}) {
+function RevealSide({ name, bid, won, color, isMe }: { name: string; bid: number; won: boolean; color: string; isMe: boolean }) {
   return (
     <div style={{
-      background: "var(--court-surface)", border: `2px solid ${locked ? color + "60" : "var(--border)"}`,
-      borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12,
-      transition: "border-color 0.2s",
+      border: `1px solid ${won ? color + "60" : "var(--border)"}`,
+      borderRadius: 10, padding: "14px 12px", textAlign: "center",
+      background: won ? `${color}08` : "transparent",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 7, background: color, color: "#000",
-          fontFamily: "var(--font-d)", fontWeight: 900, fontSize: 14,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>P{num}</div>
-        <div>
-          <div style={{ fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 800 }}>{label}</div>
-          <div style={{ fontSize: 11, color: "var(--white-dim)" }}>Budget: {fmt$(maxBudget)}</div>
-        </div>
-        {locked && <div style={{ marginLeft: "auto", fontFamily: "var(--font-d)", fontSize: 12, fontWeight: 700, color, letterSpacing: "0.05em" }}>LOCKED ✓</div>}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: "8px 12px", gap: 4 }}>
-        <span style={{ fontFamily: "var(--font-d)", fontSize: 28, fontWeight: 800, color, lineHeight: 1 }}>$</span>
-        <input
-          type="number" min="0" max={(maxBudget / 100).toFixed(2)} step="0.25"
-          value={value} onChange={(e) => onChange(e.target.value)}
-          disabled={locked} placeholder="0.00"
-          style={{
-            background: "none", border: "none", color,
-            fontFamily: "var(--font-d)", fontSize: 34, fontWeight: 900, width: "100%", minWidth: 0,
-          }}
-        />
-      </div>
-
-      {locked ? (
-        <div style={{ fontFamily: "var(--font-d)", fontSize: 12, fontWeight: 700, color, textAlign: "center", letterSpacing: "0.05em" }}>
-          Waiting for other player…
-        </div>
-      ) : (
-        <button style={{
-          border: `2px solid ${color}`, borderRadius: 8, background: "transparent",
-          color, fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 800,
-          letterSpacing: "0.08em", padding: "10px",
-        }} onClick={onLock}>
-          LOCK IN BID
-        </button>
-      )}
+      {won && <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", color, marginBottom: 6, textTransform: "uppercase" as const }}>Winner</div>}
+      <div style={{ fontSize: 11, color: "var(--white-dim)", marginBottom: 6 }}>{name}{isMe ? " (you)" : ""}</div>
+      {bid > 0
+        ? <div style={{ fontFamily: "var(--font-d)", fontSize: 28, fontWeight: 700, color }}>{fmt$(bid)}</div>
+        : <div style={{ fontFamily: "var(--font-d)", fontSize: 16, fontWeight: 500, color: "var(--white-dim)" }}>Passed</div>
+      }
     </div>
   );
 }
 
-function BidResult({ name, bid, isWinner, color }: { name: string; bid: number; isWinner: boolean; color: string }) {
-  return (
-    <div style={{
-      flex: 1, border: `2px solid ${isWinner ? color : "var(--border)"}`,
-      borderRadius: 12, padding: "16px 12px", textAlign: "center",
-      background: isWinner ? `${color}10` : "transparent", position: "relative",
-      transition: "all 0.3s",
-    }}>
-      {isWinner && <div style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", fontSize: 24 }}>👑</div>}
-      <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 700, color: "var(--white-dim)", marginBottom: 4 }}>{name}</div>
-      <div style={{ fontFamily: "var(--font-d)", fontSize: 38, fontWeight: 900, color, lineHeight: 1 }}>{fmt$(bid)}</div>
-    </div>
-  );
-}
-
-/* ─────────── Styles ─────────── */
+/* ─── Styles ─── */
 const s: Record<string, React.CSSProperties> = {
   layout: { minHeight: "100vh", display: "flex" },
   sidebar: {
-    width: 280, background: "var(--court-mid)", borderRight: "1px solid var(--border)",
+    width: 260, background: "var(--court-mid)", borderRight: "1px solid var(--border)",
     flexShrink: 0, position: "sticky" as const, top: 0, height: "100vh", overflowY: "auto",
   },
-  sidebarInner: { padding: 12, display: "flex", flexDirection: "column", gap: 12 },
-  sideLabel: { fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 700, letterSpacing: "0.22em", color: "var(--white-dim)", padding: "4px 2px" },
-  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 50, display: "flex" },
-  drawer: { background: "var(--court-mid)", width: 300, padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
-  closeBtn: { background: "none", border: "1px solid var(--border)", color: "var(--white-dim)", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, alignSelf: "flex-start" },
-  main: { flex: 1, padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20, maxWidth: 680, margin: "0 auto", width: "100%" },
-  topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const, gap: 12 },
-  roundBadge: { fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700, letterSpacing: "0.25em", color: "var(--white-dim)" },
-  budgets: { display: "flex", alignItems: "center", gap: 20, background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 20px" },
-  rosterBtn: { background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--white)", fontSize: 18, padding: "6px 12px", display: "none" },
-  auctionLabel: { fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 700, letterSpacing: "0.25em", color: "var(--gold)", marginBottom: 10 },
-  bidsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
-  revealBtn: { background: "var(--gold)", color: "#000", fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 800, letterSpacing: "0.05em", padding: "16px", borderRadius: 10, animation: "pulseGold 2s infinite", alignSelf: "center" as const },
-  waitingMsg: { textAlign: "center" as const, fontSize: 13, color: "var(--white-dim)", fontStyle: "italic" },
-  bidReveal: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center" },
-  vsReveal: { fontFamily: "var(--font-d)", fontSize: 22, fontWeight: 900, color: "var(--white-dim)", textAlign: "center" as const },
-  outcome: { background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 24px", textAlign: "center" as const },
-  nextBtn: { background: "var(--court-surface)", border: "2px solid rgba(255,255,255,0.18)", borderRadius: 10, color: "var(--white)", fontFamily: "var(--font-d)", fontSize: 20, fontWeight: 800, letterSpacing: "0.05em", padding: "14px 32px", alignSelf: "center" as const },
-  log: { background: "var(--court-mid)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 18px" },
-  logLabel: { fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "var(--white-dim)", marginBottom: 10 },
-  logRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
+  sideInner: { padding: 14, display: "flex", flexDirection: "column", gap: 12 },
+  sideHeader: { display: "flex", alignItems: "center", gap: 8, padding: "4px 0 8px", borderBottom: "1px solid var(--border)", marginBottom: 4 },
+  logoDot: { width: 20, height: 20, borderRadius: 5, background: "var(--gold)", flexShrink: 0 },
+  logoText: { fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 700, color: "var(--white)", letterSpacing: "-0.01em" },
+  sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)", textTransform: "uppercase" as const, padding: "2px 0 6px" },
+  overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 50, display: "flex" },
+  drawer: { background: "var(--court-mid)", width: 280, padding: 14, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
+  drawerClose: { background: "transparent", border: "1px solid var(--border)", color: "var(--white-dim)", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 500, alignSelf: "flex-end" as const, marginBottom: 4 },
+  main: { flex: 1, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 600, margin: "0 auto", width: "100%" },
+  topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 12, borderBottom: "1px solid var(--border)" },
+  topLeft: { display: "flex", alignItems: "center", gap: 8 },
+  roundLabel: { fontFamily: "var(--font-d)", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", color: "var(--white-dim)", textTransform: "uppercase" as const },
+  roundDot: { width: 3, height: 3, borderRadius: "50%", background: "var(--border-strong)" },
+  topRight: { display: "flex", alignItems: "center", gap: 12 },
+  budgetRow: { display: "flex", alignItems: "center", gap: 12 },
+  rosterToggle: { fontSize: 12, fontWeight: 500, color: "var(--white-dim)", background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 10px", display: "none" },
+  // Waiting room
+  waitingCard: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 12, padding: "28px 32px", textAlign: "center",
+  },
+  joinCodeDisplay: {
+    display: "inline-flex", flexDirection: "column" as const, alignItems: "center", gap: 8,
+    cursor: "pointer", padding: "20px 32px",
+    background: "var(--court-mid)", border: "1px solid var(--border-strong)",
+    borderRadius: 10,
+  },
+  joinCodeText: {
+    fontFamily: "var(--font-d)", fontSize: 44, fontWeight: 700,
+    color: "var(--gold)", letterSpacing: "0.18em", lineHeight: 1,
+  },
+  // Bidding
+  statusBar: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 10, padding: "12px 16px",
+  },
+  currentBidAmount: {
+    fontFamily: "var(--font-d)", fontSize: 32, fontWeight: 700,
+    color: "var(--white)", letterSpacing: "-0.02em", lineHeight: 1,
+  },
+  pill: {
+    fontSize: 10, fontWeight: 600, letterSpacing: "0.06em",
+    color: "var(--accent)", background: "rgba(16,185,129,0.1)",
+    border: "1px solid rgba(16,185,129,0.2)", borderRadius: 100, padding: "2px 8px",
+  },
+  panel: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 12, padding: "16px",
+  },
+  bidRow: {
+    display: "flex", alignItems: "center", gap: 4,
+    background: "var(--court-mid)", borderRadius: 8, padding: "8px 12px", marginBottom: 12,
+  },
+  bidInput: {
+    background: "none", border: "none",
+    fontFamily: "var(--font-d)", fontSize: 30, fontWeight: 700,
+    width: "100%", minWidth: 0, letterSpacing: "-0.01em",
+  },
+  errMsg: {
+    fontSize: 11, color: "#F87171",
+    background: "rgba(248,113,113,0.08)", borderRadius: 6, padding: "6px 10px", marginBottom: 8,
+  },
+  btnRaise: {
+    flex: 1, padding: "9px 16px",
+    color: "#fff", fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600,
+    letterSpacing: "0.02em", borderRadius: 7, border: "none", transition: "opacity 150ms",
+  },
+  btnPass: {
+    padding: "9px 16px",
+    color: "var(--white-dim)", fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 500,
+    background: "transparent", borderRadius: 7,
+    border: "1px solid var(--border-strong)", transition: "border-color 150ms",
+  },
+  waitingTurnPanel: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12,
+  },
+  spinnerSm: {
+    width: 16, height: 16, borderRadius: "50%",
+    border: "2px solid var(--border-strong)", borderTopColor: "var(--white-dim)",
+    animation: "spin 0.9s linear infinite", flexShrink: 0,
+  },
+  historyPanel: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 10, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8,
+  },
+  historyRow: { display: "flex", alignItems: "center", gap: 8 },
+  // Reveal
+  revealGrid: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "center" },
+  vsLabel: { fontFamily: "var(--font-d)", fontSize: 12, fontWeight: 600, color: "var(--white-dim)", textAlign: "center" as const },
+  outcomePanel: {
+    background: "var(--court-surface)", border: "1px solid var(--border)",
+    borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center",
+  },
+  nextBtn: {
+    alignSelf: "center" as const,
+    background: "var(--court-surface)", border: "1px solid var(--border-strong)",
+    color: "var(--white)", fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600,
+    letterSpacing: "0.02em", padding: "10px 24px", borderRadius: 8,
+  },
+  connectingDot: {
+    width: 8, height: 8, borderRadius: "50%",
+    background: "var(--gold)", animation: "pulse 1.2s ease-in-out infinite",
+  },
 };
