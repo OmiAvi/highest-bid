@@ -1,6 +1,7 @@
 import { POSITIONS, POSITION_COLORS, POSITION_LABELS } from "../lib/players";
 import type { RosterSlot } from "../lib/game";
-import { fmt$ } from "../lib/game";
+import { effectiveRating, fmt$ } from "../lib/game";
+import { getPlayerHeadshot } from "../lib/headshots";
 
 interface Props {
   name: string;
@@ -45,6 +46,7 @@ export function RosterPanel({ name, slots, budget, num }: Props) {
         const slot = slots.find((s) => s.position === pos)!;
         const pc = POSITION_COLORS[pos];
         const filled = slot.playerName !== null;
+        const headshot = filled && slot.sourcePosition ? getPlayerHeadshot(slot.playerName!, slot.sourcePosition) : null;
 
         return (
           <div key={pos} style={{
@@ -60,16 +62,28 @@ export function RosterPanel({ name, slots, budget, num }: Props) {
 
             {filled ? (
               <>
+                <div style={{
+                  width: 34, height: 34, borderRadius: 10, overflow: "hidden",
+                  border: "1px solid var(--border)", background: "var(--court-mid)", flexShrink: 0,
+                }}>
+                  <img
+                    src={headshot ?? ""}
+                    alt={`${slot.playerName} headshot`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600, color: "var(--white)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {slot.playerName}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 1 }}>
-                    {slot.playerTeam} · {slot.cost != null ? fmt$(slot.cost) : ""}
+                    {slot.playerTeam} · {slot.sourcePosition}
+                    {slot.sourcePosition !== slot.position && slot.sourcePosition ? ` in ${slot.position} (-${slot.penalty})` : ""}
+                    {slot.cost != null ? ` · ${fmt$(slot.cost)}` : ""}
                   </div>
                 </div>
                 <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600, color, flexShrink: 0 }}>
-                  {slot.stats?.rating}
+                  {effectiveRating(slot)}
                 </div>
               </>
             ) : (

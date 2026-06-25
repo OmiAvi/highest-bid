@@ -1,4 +1,15 @@
 export const NBA_PLAYERS = [
+    // 2026 Draft Class
+    { name: "Darryn Peterson", team: "Rookie", position: "PG", ppg: 18.9, rpg: 4.6, apg: 6.7, fg_pct: 45.4, rating: 88, tier: "allstar" },
+    { name: "Kingston Flemings", team: "Rookie", position: "PG", ppg: 15.8, rpg: 4.2, apg: 5.8, fg_pct: 44.6, rating: 84, tier: "starter" },
+    { name: "Ebuka Okorie", team: "Rookie", position: "SG", ppg: 16.7, rpg: 3.8, apg: 4.1, fg_pct: 44.9, rating: 83, tier: "starter" },
+    { name: "Meleek Thomas", team: "Rookie", position: "SG", ppg: 15.1, rpg: 3.6, apg: 3.9, fg_pct: 43.8, rating: 81, tier: "starter" },
+    { name: "AJ Dybantsa", team: "Rookie", position: "SF", ppg: 19.8, rpg: 6.4, apg: 3.8, fg_pct: 46.2, rating: 89, tier: "allstar" },
+    { name: "Allen Graves", team: "Rookie", position: "SF", ppg: 14.6, rpg: 5.9, apg: 2.9, fg_pct: 45.1, rating: 80, tier: "starter" },
+    { name: "Cameron Boozer", team: "Rookie", position: "PF", ppg: 20.6, rpg: 8.9, apg: 4.0, fg_pct: 51.3, rating: 90, tier: "allstar" },
+    { name: "Caleb Wilson", team: "Rookie", position: "PF", ppg: 16.2, rpg: 7.8, apg: 2.8, fg_pct: 49.4, rating: 84, tier: "starter" },
+    { name: "Aday Mara", team: "Rookie", position: "C", ppg: 15.4, rpg: 9.3, apg: 2.7, fg_pct: 56.1, rating: 85, tier: "starter" },
+    { name: "Hannes Steinbach", team: "Rookie", position: "C", ppg: 13.8, rpg: 9.8, apg: 2.1, fg_pct: 54.8, rating: 82, tier: "starter" },
     // Point Guards
     { name: "Stephen Curry", team: "GSW", position: "PG", ppg: 26.4, rpg: 4.5, apg: 5.1, fg_pct: 45.0, rating: 96, tier: "superstar" },
     { name: "Luka Dončić", team: "DAL", position: "PG", ppg: 33.9, rpg: 9.2, apg: 9.8, fg_pct: 47.7, rating: 97, tier: "superstar" },

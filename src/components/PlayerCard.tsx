@@ -1,5 +1,6 @@
 import type { NBAPlayer } from "../lib/players";
 import { POSITION_COLORS, TIER_COLORS } from "../lib/players";
+import { getPlayerHeadshot } from "../lib/headshots";
 
 interface Props { player: NBAPlayer; animKey?: number | string; }
 
@@ -13,6 +14,7 @@ const TIER_LABEL: Record<NBAPlayer["tier"], string> = {
 export function PlayerCard({ player, animKey }: Props) {
   const pc = POSITION_COLORS[player.position];
   const tc = TIER_COLORS[player.tier];
+  const headshot = getPlayerHeadshot(player.name, player.position);
 
   return (
     <div key={animKey} style={{
@@ -26,6 +28,19 @@ export function PlayerCard({ player, animKey }: Props) {
       <div style={{ height: 2, background: pc }} />
 
       <div style={{ padding: "18px 20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 16, alignItems: "center", marginBottom: 16 }}>
+          <div style={{
+            width: 120, height: 120, borderRadius: 18, overflow: "hidden",
+            border: "1px solid var(--border)", background: "var(--court-mid)", flexShrink: 0,
+          }}>
+            <img
+              src={headshot}
+              alt={`${player.name} headshot`}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          </div>
+
+          <div>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -58,6 +73,8 @@ export function PlayerCard({ player, animKey }: Props) {
             fontFamily: "var(--font-d)", fontSize: 30, fontWeight: 600,
             lineHeight: 1.1, color: "var(--white)", letterSpacing: "-0.02em",
           }}>{player.name}</div>
+        </div>
+          </div>
         </div>
 
         {/* Stats row */}

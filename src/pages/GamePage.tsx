@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import type { GameState } from "../lib/game";
-import { fmt$, toC, STARTING_BUDGET } from "../lib/game";
+import { fmt$, toC, STARTING_BUDGET, TOTAL_DRAFT_PLAYERS } from "../lib/game";
 import { PlayerCard } from "../components/PlayerCard";
 import { RosterPanel } from "../components/RosterPanel";
 import { loadSession, pollGame, raiseBid, passBid, advanceRound } from "../lib/api";
@@ -151,7 +151,7 @@ export function GamePage() {
           <div style={s.topLeft}>
             {gs.phase === "waiting"
               ? <span style={s.roundLabel}>Waiting room</span>
-              : <><span style={s.roundLabel}>Round {gs.round}</span>
+              : <><span style={s.roundLabel}>Round {gs.round}/{TOTAL_DRAFT_PLAYERS}</span>
                   <span style={s.roundDot} />
                   <span style={{ fontSize: 12, color: isMyTurn && gs.phase === "bidding" ? myColor : "var(--white-dim)" }}>
                     {gs.phase === "bidding" ? (isMyTurn ? "Your turn" : "Opponent's turn") : gs.phase === "reveal" ? "Reveal" : ""}
@@ -167,7 +167,7 @@ export function GamePage() {
                 <BudgetChip name={gs.p2Name} budget={gs.p2Budget} color="var(--accent)" isMe={myNum === 2} />
               </div>
             )}
-            <button style={s.rosterToggle} onClick={() => setRosterOpen(true)}>Roster</button>
+            <button className="mobile-roster-toggle" style={s.rosterToggle} onClick={() => setRosterOpen(true)}>Roster</button>
           </div>
         </div>
 
@@ -343,8 +343,8 @@ export function GamePage() {
                   </span>
                   <span style={{ fontSize: 12, color: "var(--white-dim)", marginLeft: 10 }}>
                     {lr.slotFilled
-                      ? `${lr.player.name} → ${lr.player.position} · ${fmt$(lr.winner === 1 ? lr.bid1 : lr.bid2)}`
-                      : `${lr.player.position} slot already filled — player lost`}
+                      ? `${lr.player.name} → ${lr.assignedSlot}${lr.outOfPosition ? ` from ${lr.player.position} (-${lr.penaltyApplied})` : ""} · ${fmt$(lr.winner === 1 ? lr.bid1 : lr.bid2)}`
+                      : `No roster slot left for ${lr.player.name}`}
                   </span>
                 </>
               ) : (
@@ -406,7 +406,7 @@ const s: Record<string, React.CSSProperties> = {
   logoText: { fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 700, color: "var(--white)", letterSpacing: "-0.01em" },
   sideLabel: { fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)", textTransform: "uppercase" as const, padding: "2px 0 6px" },
   overlay: { position: "fixed" as const, inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 50, display: "flex" },
-  drawer: { background: "var(--court-mid)", width: 280, padding: 14, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
+  drawer: { background: "var(--court-mid)", width: "min(320px, 92vw)", padding: 14, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 },
   drawerClose: { background: "transparent", border: "1px solid var(--border)", color: "var(--white-dim)", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 500, alignSelf: "flex-end" as const, marginBottom: 4 },
   main: { flex: 1, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 600, margin: "0 auto", width: "100%" },
   topbar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 12, borderBottom: "1px solid var(--border)" },
@@ -415,7 +415,7 @@ const s: Record<string, React.CSSProperties> = {
   roundDot: { width: 3, height: 3, borderRadius: "50%", background: "var(--border-strong)" },
   topRight: { display: "flex", alignItems: "center", gap: 12 },
   budgetRow: { display: "flex", alignItems: "center", gap: 12 },
-  rosterToggle: { fontSize: 12, fontWeight: 500, color: "var(--white-dim)", background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 10px", display: "none" },
+  rosterToggle: { fontSize: 12, fontWeight: 500, color: "var(--white-dim)", background: "var(--court-surface)", border: "1px solid var(--border)", borderRadius: 6, padding: "5px 10px" },
   // Waiting room
   waitingCard: {
     background: "var(--court-surface)", border: "1px solid var(--border)",
