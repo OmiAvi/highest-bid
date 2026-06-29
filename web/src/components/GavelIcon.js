@@ -1,0 +1,5 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function GavelIcon({ size = 24, color = "var(--gold)", glow = false }) {
+    const id = `gavel-glow-${Math.round(size)}`;
+    return (_jsxs("svg", { width: size, height: size, viewBox: "-4 -4 36 36", xmlns: "http://www.w3.org/2000/svg", style: { display: "block", flexShrink: 0 }, children: [glow && (_jsx("defs", { children: _jsxs("filter", { id: id, x: "-100%", y: "-100%", width: "300%", height: "300%", children: [_jsx("feGaussianBlur", { stdDeviation: "2.5", result: "b" }), _jsxs("feMerge", { children: [_jsx("feMergeNode", { in: "b" }), _jsx("feMergeNode", { in: "SourceGraphic" })] })] }) })), _jsxs("g", { transform: "rotate(-32, 13, 14)", filter: glow ? `url(#${id})` : undefined, children: [_jsx("rect", { x: "1", y: "6", width: "24", height: "10", rx: "2.5", fill: color }), _jsx("rect", { x: "1", y: "11", width: "24", height: "2.5", fill: "rgba(0,0,0,0.22)" }), _jsx("rect", { x: "16", y: "16", width: "7", height: "15", rx: "2.5", fill: color }), _jsx("rect", { x: "16", y: "27", width: "7", height: "3", rx: "1.5", fill: "rgba(0,0,0,0.18)" })] })] }));
+}
