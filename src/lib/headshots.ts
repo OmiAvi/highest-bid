@@ -1,4 +1,6 @@
 import type { Position } from "./players";
+import { ESPN_HEADSHOTS } from "./espnHeadshots";
+import { CBB_ESPN_HEADSHOTS } from "./cbbEspnHeadshots";
 
 function hash(value: string): number {
   let h = 0;
@@ -19,14 +21,17 @@ function initials(name: string): string {
 }
 
 const POSITION_TONES: Record<Position, [string, string]> = {
-  PG: ["#5E6AD2", "#8AA0FF"],
-  SG: ["#8B5CF6", "#B898FF"],
-  SF: ["#10B981", "#5BE3B0"],
-  PF: ["#D97706", "#F2A44B"],
-  C: ["#64748B", "#9AA8BC"],
+  PG: ["#FF2D78", "#FF7AB5"],
+  SG: ["#BF5FFF", "#D899FF"],
+  SF: ["#00E5FF", "#7FF4FF"],
+  PF: ["#FFB800", "#FFD566"],
+  C:  ["#64FFDA", "#A8FFF0"],
 };
 
 export function getPlayerHeadshot(name: string, position: Position): string {
+  const espnHeadshot = ESPN_HEADSHOTS[name] ?? CBB_ESPN_HEADSHOTS[name];
+  if (espnHeadshot) return espnHeadshot;
+
   const seed = hash(`${name}-${position}`);
   const [primary, secondary] = POSITION_TONES[position];
   const skin = ["#F5C7A9", "#D9A07B", "#B97850", "#8B5A3C"][seed % 4];

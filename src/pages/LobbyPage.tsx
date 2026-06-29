@@ -1,22 +1,30 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { createGame, joinGame, saveSession } from "../lib/api";
+import { createGame, createLocalGame, joinGame, saveSession } from "../lib/api";
+import type { GameMode } from "../lib/game";
+import { ArcadeBackground } from "../components/ArcadeBackground";
+import { OnboardingSlides } from "../components/OnboardingSlides";
+import { GavelIcon } from "../components/GavelIcon";
 
-type Tab = "create" | "join";
+type Tab = "create" | "join" | "local";
 
 export function LobbyPage() {
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>("create");
   const [name, setName] = useState("");
   const [joinCode, setJoinCode] = useState("");
+  const [localP1Name, setLocalP1Name] = useState("");
+  const [localP2Name, setLocalP2Name] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showSlides, setShowSlides] = useState(() => !localStorage.getItem("hb_seen_onboarding"));
+  const [gameMode, setGameMode] = useState<GameMode>("nba");
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError("");
     try {
-      const { gameId, joinCode: code, token } = await createGame(name.trim() || "Player 1");
+      const { gameId, joinCode: code, token } = await createGame(name.trim() || "Player 1", gameMode);
       saveSession(gameId, { role: "p1", token, playerName: name.trim() || "Player 1" });
       nav({ to: "/game/$gameId", params: { gameId } });
     } catch (e: unknown) {
@@ -37,48 +45,84 @@ export function LobbyPage() {
     } finally { setLoading(false); }
   }
 
+  async function handleLocal(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      const p1 = localP1Name.trim() || "Player 1";
+      const p2 = localP2Name.trim() || "Player 2";
+      const { gameId, token } = createLocalGame(p1, p2, gameMode);
+      saveSession(gameId, { mode: "local", role: "local", token, playerName: p1, player2Name: p2 });
+      nav({ to: "/game/$gameId", params: { gameId } });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to start local game");
+    } finally { setLoading(false); }
+  }
+
   const isCreate = tab === "create";
+  const isJoin = tab === "join";
 
   return (
     <div style={s.page}>
-      {/* Subtle mesh gradient */}
-      <div style={s.mesh} />
+      <ArcadeBackground />
 
       <div style={s.wrap}>
         {/* Wordmark */}
         <div style={s.header}>
-          <div style={s.logoText}>Highest Bid</div>
-          <div style={s.tagline}>NBA Draft Auction</div>
-        </div>
-
-        {/* How to play */}
-        <div style={s.card}>
-          <div style={s.cardLabel}>How it works</div>
-          <div style={s.rules}>
-            {[
-              "One player creates a game and shares the 6-letter join code",
-              "A random NBA player is put up for auction each round",
-              "Players take turns bidding — raise or pass",
-              "Pass and the current leader wins the player",
-              "Fill your PG · SG · SF · PF · C slots with the best team",
-            ].map((rule, i) => (
-              <div key={i} style={s.rule}>
-                <span style={s.ruleN}>{String(i + 1).padStart(2, "0")}</span>
-                <span style={s.ruleT}>{rule}</span>
-              </div>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }}>
+            <GavelIcon size={28} glow />
+            <div style={s.logoText}>Highest Bid</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <div style={s.tagline}>NBA Draft Auction</div>
+            <button
+              onClick={() => setShowSlides(true)}
+              style={{ fontSize: 11, color: "var(--white-dim)", background: "none", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px", letterSpacing: "0.04em", opacity: 0.7 }}
+            >
+              How to play
+            </button>
           </div>
         </div>
 
-        {/* Create / Join form */}
+        {showSlides ? (
+          <OnboardingSlides onDone={() => { localStorage.setItem("hb_seen_onboarding", "1"); setShowSlides(false); }} />
+        ) : (
         <div style={s.card}>
+          {/* Mode picker */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {(["nba", "cbb"] as GameMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => setGameMode(m)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
+                  fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700,
+                  letterSpacing: "0.04em", cursor: "pointer",
+                  background: gameMode === m
+                    ? m === "nba" ? "var(--gold)" : "var(--accent)"
+                    : "var(--court-mid)",
+                  color: gameMode === m ? "#fff" : "var(--white-dim)",
+                  boxShadow: gameMode === m
+                    ? `0 0 16px ${m === "nba" ? "rgba(255,45,120,0.35)" : "rgba(0,229,255,0.3)"}`
+                    : "none",
+                  transition: "all 180ms ease",
+                }}
+              >
+                {m === "nba" ? "🏀 NBA" : "🎓 College"}
+              </button>
+            ))}
+          </div>
+
           {/* Tabs */}
           <div style={s.tabs}>
             <button style={{ ...s.tab, ...(isCreate ? s.tabActive : {}) }} onClick={() => { setTab("create"); setError(""); }}>
-              Create game
+              Online host
             </button>
-            <button style={{ ...s.tab, ...(!isCreate ? s.tabActive : {}) }} onClick={() => { setTab("join"); setError(""); }}>
-              Join with code
+            <button style={{ ...s.tab, ...(isJoin ? s.tabActive : {}) }} onClick={() => { setTab("join"); setError(""); }}>
+              Join code
+            </button>
+            <button style={{ ...s.tab, ...(!isCreate && !isJoin ? s.tabActive : {}) }} onClick={() => { setTab("local"); setError(""); }}>
+              Same computer
             </button>
           </div>
 
@@ -98,7 +142,7 @@ export function LobbyPage() {
                 {loading ? "Creating…" : "Create game"}
               </button>
             </form>
-          ) : (
+          ) : isJoin ? (
             <form onSubmit={handleJoin} style={s.form}>
               <label style={s.label}>Join code</label>
               <input
@@ -124,8 +168,34 @@ export function LobbyPage() {
                 {loading ? "Joining…" : "Join game"}
               </button>
             </form>
+          ) : (
+            <form onSubmit={handleLocal} style={s.form}>
+              <label style={s.label}>Player 1 name</label>
+              <input
+                style={s.input}
+                placeholder="Player 1"
+                value={localP1Name}
+                onChange={e => setLocalP1Name(e.target.value)}
+                maxLength={20}
+                autoFocus
+              />
+              <label style={s.label}>Player 2 name</label>
+              <input
+                style={s.input}
+                placeholder="Player 2"
+                value={localP2Name}
+                onChange={e => setLocalP2Name(e.target.value)}
+                maxLength={20}
+              />
+              <div style={s.helperText}>Players share one screen and pass the device between turns.</div>
+              {error && <div style={s.errMsg}>{error}</div>}
+              <button type="submit" style={{ ...s.btnPrimary, background: "linear-gradient(135deg, var(--gold), var(--accent))" }} disabled={loading}>
+                {loading ? "Starting…" : "Start same-computer game"}
+              </button>
+            </form>
           )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -135,10 +205,6 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
     padding: "40px 16px", position: "relative",
-  },
-  mesh: {
-    position: "absolute", inset: 0, pointerEvents: "none",
-    background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(94,106,210,0.08) 0%, transparent 100%)",
   },
   wrap: {
     width: "100%", maxWidth: 480, display: "flex", flexDirection: "column",
@@ -157,24 +223,13 @@ const s: Record<string, React.CSSProperties> = {
     background: "var(--court-surface)", border: "1px solid var(--border)",
     borderRadius: 12, padding: "20px",
   },
-  cardLabel: {
-    fontSize: 11, fontWeight: 600, letterSpacing: "0.08em",
-    color: "var(--white-dim)", textTransform: "uppercase" as const, marginBottom: 14,
-  },
-  rules: { display: "flex", flexDirection: "column", gap: 10 },
-  rule: { display: "flex", alignItems: "baseline", gap: 12 },
-  ruleN: {
-    fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700,
-    color: "var(--gold)", minWidth: 22, letterSpacing: "0.02em",
-  },
-  ruleT: { fontSize: 13, color: "var(--white-dim)", lineHeight: 1.5 },
   tabs: {
     display: "flex", gap: 2, marginBottom: 20,
     background: "var(--court-mid)", borderRadius: 8, padding: 3,
   },
   tab: {
-    flex: 1, padding: "7px 12px", borderRadius: 6,
-    fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600,
+    flex: 1, padding: "7px 8px", borderRadius: 6,
+    fontFamily: "var(--font-d)", fontSize: 12, fontWeight: 600,
     color: "var(--white-dim)", background: "transparent", border: "none",
     transition: "all 150ms ease-out",
   },
@@ -199,6 +254,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)",
     borderRadius: 6, padding: "8px 12px",
   },
+  helperText: { fontSize: 12, color: "var(--white-dim)", lineHeight: 1.5, marginTop: 2 },
   btnPrimary: {
     marginTop: 4, padding: "10px 16px",
     background: "var(--gold)", color: "#fff",

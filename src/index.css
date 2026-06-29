@@ -1,36 +1,42 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+@font-face {
+  font-family: "Space Rabbit";
+  src: url("/fonts/Space-Rabbit.otf") format("opentype");
+  font-display: swap;
+}
+
 :root {
-  /* Surfaces — Linear layered dark */
-  --court:         #07080A;
-  --court-mid:     #0E1014;
-  --court-surface: #16181E;
-  --surface-high:  #1E2028;
+  /* Surfaces — deep arcade black-purple */
+  --court:         #06050F;
+  --court-mid:     #0C0818;
+  --court-surface: #130F1E;
+  --surface-high:  #1A1428;
 
   /* Text */
   --white:         #F0F2F5;
-  --white-dim:     #8892A4;
+  --white-dim:     #C8CCE0;
   --white-faint:   rgba(240,242,245,0.05);
 
   /* Player accents */
-  --gold:          #5E6AD2;   /* P1 — Linear indigo/purple */
-  --gold-glow:     rgba(94,106,210,0.14);
-  --accent:        #10B981;   /* P2 — emerald */
-  --accent-glow:   rgba(16,185,129,0.12);
+  --gold:          #FF2D78;   /* P1 — hot magenta */
+  --gold-glow:     rgba(255,45,120,0.18);
+  --accent:        #00E5FF;   /* P2 — electric cyan */
+  --accent-glow:   rgba(0,229,255,0.14);
 
   /* Borders */
-  --border:        rgba(255,255,255,0.07);
-  --border-strong: rgba(255,255,255,0.13);
+  --border:        rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.15);
 
-  /* Position palette */
-  --pg: #5E6AD2;
-  --sg: #8B5CF6;
-  --sf: #10B981;
-  --pf: #D97706;
-  --c:  #64748B;
+  /* Position palette — neon arcade */
+  --pg: #FF2D78;
+  --sg: #BF5FFF;
+  --sf: #00E5FF;
+  --pf: #FFB800;
+  --c:  #64FFDA;
 
   /* Typography */
-  --font-d: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --font-d: 'Space Rabbit', 'Inter Tight', 'Inter', system-ui, sans-serif;
   --font-b: 'Inter', system-ui, sans-serif;
 
   /* Radius */
@@ -54,12 +60,17 @@ a { color: inherit; text-decoration: none; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(94,106,210,0.3); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(255,45,120,0.4); border-radius: 4px; }
 
-@keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
-@keyframes popIn  { from { opacity:0; transform:scale(0.96); }     to { opacity:1; transform:none; } }
-@keyframes spin   { to { transform:rotate(360deg); } }
-@keyframes pulse  { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+@keyframes fadeUp    { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+@keyframes popIn     { from { opacity:0; transform:scale(0.96); }     to { opacity:1; transform:none; } }
+@keyframes spin      { to { transform:rotate(360deg); } }
+@keyframes pulse     { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+@keyframes slotIn    { from { transform:translateY(-16px); opacity:0.3; } to { transform:translateY(0); opacity:1; } }
+@keyframes bidPop    { 0% { transform:scale(1.22); } 100% { transform:scale(1); } }
+@keyframes gavelHit  { 0% { transform:rotate(-50deg) translate(-8px,-14px); } 55% { transform:rotate(8deg) translate(1px,1px); } 75% { transform:rotate(-3deg); } 100% { transform:rotate(0deg); } }
+@keyframes fillSlot  { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
+@keyframes glowPulse { 0%,100% { box-shadow:0 0 12px rgba(255,45,120,0.3); } 50% { box-shadow:0 0 28px rgba(255,45,120,0.6); } }
 
 .desktop-sidebar { display: flex; }
 .mobile-roster-toggle { display: none; }

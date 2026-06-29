@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400">
+  <defs>
+    <!-- Glow filters -->
+    <filter id="fp" x="-300%" y="-300%" width="700%" height="700%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fc" x="-300%" y="-300%" width="700%" height="700%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fw" x="-100%" y="-200%" width="300%" height="500%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fh" x="-100%" y="-200%" width="300%" height="500%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="fdot" x="-400%" y="-400%" width="900%" height="900%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Background -->
+    <radialGradient id="bg" cx="45%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#130E22"/>
+      <stop offset="100%" stop-color="#06050F"/>
+    </radialGradient>
+
+    <!-- Orbs -->
+    <radialGradient id="op" cx="22%" cy="35%" r="50%">
+      <stop offset="0%" stop-color="#FF2D78" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#FF2D78" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="oc" cx="80%" cy="68%" r="46%">
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.26"/>
+      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Diamond border gradient -->
+    <linearGradient id="bdg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF2D78" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#A855F7" stop-opacity="0.70"/>
+      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <!-- BID text gradient -->
+    <linearGradient id="wg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#C0CCEC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background layers -->
+  <rect width="800" height="400" fill="url(#bg)"/>
+  <rect width="800" height="400" fill="url(#op)"/>
+  <rect width="800" height="400" fill="url(#oc)"/>
+
+  <!-- Scanlines -->
+  <line x1="0" y1="0" x2="800" y2="0" stroke="rgba(0,0,0,0)" stroke-width="0"/>
+  <!-- (subtle every-6px scanlines as a repeated pattern) -->
+  <rect width="800" height="1" y="32"  fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="64"  fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="96"  fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="128" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="160" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="192" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="224" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="256" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="288" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="320" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="352" fill="rgba(0,0,0,0.10)"/>
+  <rect width="800" height="1" y="384" fill="rgba(0,0,0,0.10)"/>
+
+  <!-- ── DIAMOND BADGE MARK ── -->
+
+  <!-- Outer pink glow shadow -->
+  <polygon points="170,58 302,200 170,342 38,200"
+    fill="none" stroke="#FF2D78" stroke-width="8" opacity="0.15"
+    filter="url(#fp)"/>
+
+  <!-- Diamond fill -->
+  <polygon points="170,62 298,200 170,338 42,200"
+    fill="rgba(6,5,15,0.75)"/>
+
+  <!-- Diamond border -->
+  <polygon points="170,62 298,200 170,338 42,200"
+    fill="none" stroke="url(#bdg)" stroke-width="2.5"/>
+
+  <!-- Inner diamond (subtle surface) -->
+  <polygon points="170,76 284,200 170,324 56,200"
+    fill="rgba(255,255,255,0.022)"/>
+
+  <!-- HB monogram — H in pink, B in cyan -->
+  <text x="107" y="232"
+    font-family="'Arial Black', 'Arial Bold', Impact, Arial, sans-serif"
+    font-size="92" font-weight="900"
+    fill="#FF2D78"
+    filter="url(#fp)"
+  >H</text>
+  <text x="171" y="232"
+    font-family="'Arial Black', 'Arial Bold', Impact, Arial, sans-serif"
+    font-size="92" font-weight="900"
+    fill="#00E5FF"
+    filter="url(#fc)"
+  >B</text>
+
+  <!-- Corner dots with glow -->
+  <circle cx="170" cy="62"  r="5" fill="#FF2D78" filter="url(#fdot)"/>
+  <circle cx="170" cy="62"  r="3" fill="#FF2D78"/>
+  <circle cx="298" cy="200" r="5" fill="#A855F7" filter="url(#fdot)"/>
+  <circle cx="298" cy="200" r="3" fill="#A855F7"/>
+  <circle cx="170" cy="338" r="5" fill="#00E5FF" filter="url(#fdot)"/>
+  <circle cx="170" cy="338" r="3" fill="#00E5FF"/>
+  <circle cx="42"  cy="200" r="5" fill="#FF2D78" filter="url(#fdot)"/>
+  <circle cx="42"  cy="200" r="3" fill="#FF2D78"/>
+
+  <!-- Diagonal tick marks along diamond edges (decorative) -->
+  <line x1="104" y1="131" x2="116" y2="119" stroke="#FF2D78" stroke-width="1.5" opacity="0.35"/>
+  <line x1="224" y1="131" x2="236" y2="119" stroke="#A855F7" stroke-width="1.5" opacity="0.30"/>
+  <line x1="236" y1="281" x2="224" y2="269" stroke="#00E5FF" stroke-width="1.5" opacity="0.30"/>
+  <line x1="116" y1="281" x2="104" y2="269" stroke="#FF2D78" stroke-width="1.5" opacity="0.30"/>
+
+  <!-- ── DIVIDER ── -->
+  <line x1="348" y1="68" x2="348" y2="332" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+
+  <!-- ── LOGOTYPE ── -->
+
+  <!-- "HIGHEST" — pink neon -->
+  <text x="374" y="160"
+    font-family="'Arial Black', 'Arial Bold', Impact, Arial, sans-serif"
+    font-size="52" font-weight="900"
+    letter-spacing="6"
+    fill="#FF2D78"
+    filter="url(#fh)"
+  >HIGHEST</text>
+
+  <!-- Accent line below HIGHEST -->
+  <line x1="374" y1="172" x2="764" y2="172" stroke="#FF2D78" stroke-width="1" opacity="0.22"/>
+
+  <!-- "BID" — white, hero word -->
+  <text x="368" y="288"
+    font-family="'Arial Black', 'Arial Bold', Impact, Arial, sans-serif"
+    font-size="136" font-weight="900"
+    letter-spacing="-3"
+    fill="url(#wg)"
+    filter="url(#fw)"
+  >BID</text>
+
+  <!-- Tagline -->
+  <text x="376" y="332"
+    font-family="'Arial', Helvetica, sans-serif"
+    font-size="13"
+    letter-spacing="5.5"
+    fill="#00E5FF"
+    opacity="0.60"
+  >NBA DRAFT AUCTION</text>
+
+  <!-- ── CORNER BRACKETS ── -->
+  <path d="M 744 28 L 784 28 L 784 68"  fill="none" stroke="#00E5FF" stroke-width="1.5" opacity="0.45"/>
+  <path d="M 16  332 L 16  372 L 56  372" fill="none" stroke="#FF2D78" stroke-width="1.5" opacity="0.45"/>
+  <!-- Faint opposite corners -->
+  <path d="M 16  28  L 56  28"  fill="none" stroke="#FF2D78" stroke-width="1" opacity="0.18"/>
+  <path d="M 744 372 L 784 372" fill="none" stroke="#00E5FF" stroke-width="1" opacity="0.18"/>
+
+  <!-- Bottom mini neon grid (perspective lines, right side, decorative) -->
+  <line x1="600" y1="400" x2="480" y2="370" stroke="rgba(0,229,255,0.12)" stroke-width="1"/>
+  <line x1="680" y1="400" x2="560" y2="370" stroke="rgba(0,229,255,0.10)" stroke-width="1"/>
+  <line x1="760" y1="400" x2="640" y2="370" stroke="rgba(0,229,255,0.08)" stroke-width="1"/>
+  <line x1="480" y1="370" x2="800" y2="370" stroke="rgba(0,229,255,0.10)" stroke-width="1"/>
+</svg>

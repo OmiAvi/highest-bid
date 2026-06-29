@@ -2,7 +2,7 @@ import type { NBAPlayer } from "../lib/players";
 import { POSITION_COLORS, TIER_COLORS } from "../lib/players";
 import { getPlayerHeadshot } from "../lib/headshots";
 
-interface Props { player: NBAPlayer; animKey?: number | string; }
+interface Props { player: NBAPlayer; animKey?: number | string; large?: boolean; }
 
 const TIER_LABEL: Record<NBAPlayer["tier"], string> = {
   superstar: "Superstar",
@@ -11,10 +11,11 @@ const TIER_LABEL: Record<NBAPlayer["tier"], string> = {
   role:      "Role Player",
 };
 
-export function PlayerCard({ player, animKey }: Props) {
+export function PlayerCard({ player, animKey, large }: Props) {
   const pc = POSITION_COLORS[player.position];
   const tc = TIER_COLORS[player.tier];
   const headshot = getPlayerHeadshot(player.name, player.position);
+  const imgSize = large ? 180 : 140;
 
   return (
     <div key={animKey} style={{
@@ -25,12 +26,12 @@ export function PlayerCard({ player, animKey }: Props) {
       animation: "popIn 0.2s ease-out",
     }}>
       {/* Top accent bar */}
-      <div style={{ height: 2, background: pc }} />
+      <div style={{ height: 3, background: pc }} />
 
-      <div style={{ padding: "18px 20px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 16, alignItems: "center", marginBottom: 16 }}>
+      <div style={{ padding: large ? "24px 28px" : "20px 24px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `${imgSize}px minmax(0,1fr)`, gap: large ? 22 : 16, alignItems: "center", marginBottom: large ? 22 : 20 }}>
           <div style={{
-            width: 120, height: 120, borderRadius: 18, overflow: "hidden",
+            width: imgSize, height: imgSize, borderRadius: large ? 22 : 18, overflow: "hidden",
             border: "1px solid var(--border)", background: "var(--court-mid)", flexShrink: 0,
           }}>
             <img
@@ -40,40 +41,42 @@ export function PlayerCard({ player, animKey }: Props) {
             />
           </div>
 
-          <div>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{
-              fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 600,
-              letterSpacing: "0.06em", color: pc,
-              background: `${pc}18`, border: `1px solid ${pc}30`,
-              borderRadius: 5, padding: "2px 8px",
-            }}>{player.position}</span>
-            <span style={{
-              fontFamily: "var(--font-d)", fontSize: 11, fontWeight: 500,
-              color: tc, letterSpacing: "0.04em",
-            }}>{TIER_LABEL[player.tier]}</span>
-          </div>
-          <div style={{
-            fontFamily: "var(--font-d)", fontSize: 24, fontWeight: 700,
-            color: tc, letterSpacing: "-0.01em",
-          }}>
-            {player.rating}
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--white-dim)", marginLeft: 3 }}>OVR</span>
-          </div>
-        </div>
+          <div style={{ minWidth: 0 }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: large ? 18 : 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <span style={{
+                  fontFamily: "var(--font-d)", fontSize: large ? 13 : 11, fontWeight: 600,
+                  letterSpacing: "0.06em", color: pc,
+                  background: `${pc}18`, border: `1px solid ${pc}30`,
+                  borderRadius: 5, padding: large ? "3px 10px" : "2px 8px",
+                  flexShrink: 0,
+                }}>{player.position}</span>
+                <span style={{
+                  fontFamily: "var(--font-d)", fontSize: large ? 13 : 11, fontWeight: 500,
+                  color: tc, letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{TIER_LABEL[player.tier]}</span>
+              </div>
+              <div style={{
+                fontFamily: "var(--font-d)", fontSize: large ? 34 : "clamp(18px, 5vw, 28px)", fontWeight: 700,
+                color: tc, letterSpacing: "-0.01em", flexShrink: 0,
+              }}>
+                {player.rating}
+                <span style={{ fontSize: large ? 13 : 11, fontWeight: 500, color: "var(--white-dim)", marginLeft: 3 }}>OVR</span>
+              </div>
+            </div>
 
-        {/* Name */}
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--white-dim)", letterSpacing: "0.04em", marginBottom: 3 }}>
-            {player.team}
-          </div>
-          <div style={{
-            fontFamily: "var(--font-d)", fontSize: 30, fontWeight: 600,
-            lineHeight: 1.1, color: "var(--white)", letterSpacing: "-0.02em",
-          }}>{player.name}</div>
-        </div>
+            {/* Name */}
+            <div style={{ marginBottom: large ? 4 : 14 }}>
+              <div style={{ fontSize: large ? 13 : 11, fontWeight: 500, color: "var(--white-dim)", letterSpacing: "0.04em", marginBottom: 3 }}>
+                {player.team}
+              </div>
+              <div style={{
+                fontFamily: "var(--font-d)", fontSize: large ? 42 : "clamp(18px, 6vw, 34px)", fontWeight: 600,
+                lineHeight: 1.05, color: "var(--white)", letterSpacing: "-0.02em",
+                overflowWrap: "break-word", wordBreak: "break-word",
+              }}>{player.name}</div>
+            </div>
           </div>
         </div>
 
@@ -90,12 +93,12 @@ export function PlayerCard({ player, animKey }: Props) {
             { label: "FG%", value: `${player.fg_pct.toFixed(1)}` },
           ].map(({ label, value }) => (
             <div key={label} style={{
-              background: "var(--court-mid)", padding: "10px 6px", textAlign: "center",
+              background: "var(--court-mid)", padding: large ? "14px 8px" : "12px 8px", textAlign: "center",
             }}>
-              <div style={{ fontFamily: "var(--font-d)", fontSize: 18, fontWeight: 600, color: "var(--white)", lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-d)", fontSize: large ? 24 : 20, fontWeight: 600, color: "var(--white)", lineHeight: 1 }}>
                 {value}
               </div>
-              <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", color: "var(--white-dim)", marginTop: 3 }}>
+              <div style={{ fontSize: large ? 11 : 10, fontWeight: 500, letterSpacing: "0.08em", color: "var(--white-dim)", marginTop: 3 }}>
                 {label}
               </div>
             </div>

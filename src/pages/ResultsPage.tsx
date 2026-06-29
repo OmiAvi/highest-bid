@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "@tanstack/react-router";
 import type { GameState, RosterSlot } from "../lib/game";
+import { GavelIcon } from "../components/GavelIcon";
 import { teamScore, teamTotals, fmt$, STARTING_BUDGET, effectiveRating, simulateBestOfSeven } from "../lib/game";
 import { POSITIONS, POSITION_COLORS, POSITION_LABELS, TIER_COLORS } from "../lib/players";
 import { loadSession, pollGame } from "../lib/api";
@@ -78,7 +79,7 @@ export function ResultsPage() {
         {/* Header */}
         <div style={pg.header}>
           <div style={pg.headerTop}>
-            <div style={pg.logoDot} />
+            <GavelIcon size={22} glow />
             <span style={pg.logoText}>Highest Bid</span>
             <span style={{ fontSize: 11, color: "var(--white-dim)", marginLeft: 8 }}>Game #{gameId}</span>
           </div>
@@ -213,7 +214,7 @@ function ScoreCard({ name, score, totals, spent, won, color, num }: {
   return (
     <div style={{
       flex: 1, border: `1px solid ${won ? color + "40" : "var(--border)"}`,
-      borderRadius: 12, padding: "18px 16px", textAlign: "center",
+      borderRadius: 12, padding: "14px 10px", textAlign: "center",
       background: won ? `${color}06` : "var(--court-surface)",
       position: "relative",
     }}>
@@ -227,7 +228,7 @@ function ScoreCard({ name, score, totals, spent, won, color, num }: {
         <div style={{ width: 20, height: 20, borderRadius: 5, background: color, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-d)", fontWeight: 700, fontSize: 10, color: "#fff" }}>P{num}</div>
         <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600 }}>{name}</div>
       </div>
-      <div style={{ fontFamily: "var(--font-d)", fontSize: 48, fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.02em" }}>{score}</div>
+      <div style={{ fontFamily: "var(--font-d)", fontSize: "clamp(32px, 8vw, 48px)", fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.02em" }}>{score}</div>
       <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)", marginBottom: 12 }}>EFFECTIVE OVR</div>
       <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
         {[["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]].map(([l, v]) => (
@@ -298,7 +299,7 @@ function FullRoster({ name, slots, color, num }: { name: string; slots: RosterSl
                     {` · ${fmt$(slot.cost ?? 0)}`}
                   </div>
                 </div>
-                <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700, color: tc, flexShrink: 0 }}>{effectiveRating(slot)}</div>
+                <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700, color: tc, flexShrink: 0, minWidth: 30, textAlign: "right" as const }}>{effectiveRating(slot)}</div>
               </>
             ) : (
               <div style={{ flex: 1, fontSize: 11, color: "var(--white-dim)", opacity: 0.45 }}>{POSITION_LABELS[pos]}</div>
@@ -315,12 +316,11 @@ const pg: Record<string, React.CSSProperties> = {
   content: { maxWidth: 780, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24, animation: "fadeUp 0.3s ease-out" },
   header: { paddingBottom: 16, borderBottom: "1px solid var(--border)" },
   headerTop: { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 },
-  logoDot: { width: 20, height: 20, borderRadius: 5, background: "var(--gold)" },
   logoText: { fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 700, color: "var(--white)", letterSpacing: "-0.01em" },
-  resultBanner: { fontFamily: "var(--font-d)", fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1 },
-  scoreRow: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center" },
-  scoreCenter: { textAlign: "center", flexShrink: 0 },
-  scoreLine: { fontFamily: "var(--font-d)", fontSize: 40, fontWeight: 700, lineHeight: 1 },
+  resultBanner: { fontFamily: "var(--font-d)", fontSize: "clamp(26px, 7vw, 40px)", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1 },
+  scoreRow: { display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 8, alignItems: "center" },
+  scoreCenter: { textAlign: "center", flexShrink: 0, padding: "0 4px" },
+  scoreLine: { fontFamily: "var(--font-d)", fontSize: "clamp(28px, 7vw, 40px)", fontWeight: 700, lineHeight: 1, whiteSpace: "nowrap" as const },
   card: {
     background: "var(--court-surface)", border: "1px solid var(--border)",
     borderRadius: 12, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14,

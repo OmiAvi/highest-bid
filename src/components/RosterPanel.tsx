@@ -82,7 +82,7 @@ export function RosterPanel({ name, slots, budget, num }: Props) {
                     {slot.cost != null ? ` · ${fmt$(slot.cost)}` : ""}
                   </div>
                 </div>
-                <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600, color, flexShrink: 0 }}>
+                <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600, color, flexShrink: 0, minWidth: 30, textAlign: "right" as const }}>
                   {effectiveRating(slot)}
                 </div>
               </>

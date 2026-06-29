@@ -1,7 +1,8 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { createWaitingGame, applyRaise, applyPassResult, advanceRound } from "../src/lib/game";
+import { createWaitingGame, applyRaise, applyPassResult, applyAssignmentChoice, advanceRound, getMaxBidForPlayer, type GameMode } from "../src/lib/game";
 import type { GameState } from "../src/lib/game";
+import type { Position } from "../src/lib/players";
 
 export interface Env {
   DB: D1Database;
@@ -64,12 +65,13 @@ export default {
     try {
       // POST /api/games — create game (P1)
       if (path === "/api/games" && request.method === "POST") {
-        const body = (await request.json()) as { p1Name?: string };
+        const body = (await request.json()) as { p1Name?: string; gameMode?: GameMode };
         const id = genId();
         const joinCode = genJoinCode();
         const p1Token = genId(16);
         const p1Name = (body.p1Name || "Player 1").trim().slice(0, 20);
-        const state = createWaitingGame(id, p1Name);
+        const gameMode: GameMode = body.gameMode === "cbb" ? "cbb" : "nba";
+        const state = createWaitingGame(id, p1Name, gameMode);
 
         await env.DB.prepare(
           `INSERT INTO games (id, player1_name, player2_name, state_json, join_code, p1_token, p2_token)
@@ -136,11 +138,11 @@ export default {
         if (state.phase !== "bidding") return err("Not in bidding phase");
         if (state.biddingTurn !== playerNum) return err("Not your turn");
 
-        const budget = playerNum === 1 ? state.p1Budget : state.p2Budget;
         const bid = Math.round(Number(body.bidCents));
+        const maxBid = getMaxBidForPlayer(state, playerNum);
 
         if (isNaN(bid) || bid <= state.currentBid) return err("Bid must be higher than current bid");
-        if (bid > budget) return err("Bid exceeds your budget");
+        if (bid > maxBid) return err(`Bid exceeds your max allowed bid of $${maxBid}`);
 
         const newState = applyRaise(state, playerNum, bid);
         await env.DB.prepare(`UPDATE games SET state_json = ? WHERE id = ?`)
@@ -173,6 +175,31 @@ export default {
       }
 
       // POST /api/games/:id/advance — advance to next round (after reveal)
+      if (path.match(/^\/api\/games\/[^/]+\/assign-slot$/) && request.method === "POST") {
+        const id = path.split("/")[3];
+        const body = (await request.json()) as { token: string; position: Position };
+        const game = await env.DB.prepare("SELECT * FROM games WHERE id = ?")
+          .bind(id).first<GameRow>();
+
+        if (!game) return err("Game not found", 404);
+
+        const playerNum = roleOf(body.token, game);
+        if (!playerNum) return err("Unauthorized", 403);
+
+        const state: GameState = JSON.parse(game.state_json);
+        if (state.phase !== "reveal") return err("Not in reveal phase");
+        if (!state.lastResult?.winner) return err("No player awaiting placement");
+        if (state.lastResult.winner !== playerNum) return err("Only the winner can choose the slot");
+        if (state.lastResult.assignedSlot) return err("Player already assigned");
+
+        const newState = applyAssignmentChoice(state, playerNum, body.position);
+        await env.DB.prepare(`UPDATE games SET state_json = ? WHERE id = ?`)
+          .bind(JSON.stringify(newState), id).run();
+
+        return json({ ok: true });
+      }
+
+      // POST /api/games/:id/advance — advance to next round (after reveal)
       if (path.match(/^\/api\/games\/[^/]+\/advance$/) && request.method === "POST") {
         const id = path.split("/")[3];
         const body = (await request.json()) as { token: string };
@@ -186,6 +213,7 @@ export default {
 
         const state: GameState = JSON.parse(game.state_json);
         if (state.phase !== "reveal") return json({ ok: true }); // idempotent
+        if (state.lastResult?.winner && !state.lastResult.assignedSlot) return err("Choose a lineup slot first");
 
         const newState = advanceRound(state);
         await env.DB.prepare(`UPDATE games SET state_json = ? WHERE id = ?`)

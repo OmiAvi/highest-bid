@@ -1,15 +1,16 @@
 import { NBA_PLAYERS, POSITIONS, type Position, type NBAPlayer } from "./players";
+import { CBB_PLAYERS } from "./cbbPlayers";
 
-export const STARTING_BUDGET = 2000; // cents ($20.00)
+export const STARTING_BUDGET = 20; // dollars
 export const DRAFT_PLAYERS_PER_POSITION = 2;
 export const TOTAL_DRAFT_PLAYERS = POSITIONS.length * DRAFT_PLAYERS_PER_POSITION;
 
-export function fmt$(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+export function fmt$(amount: number): string {
+  return `$${Math.round(amount)}`;
 }
 
 export function toC(dollars: string | number): number {
-  return Math.round(Number(dollars) * 100);
+  return Math.max(0, Math.round(Number(dollars)));
 }
 
 export interface PlayerStats {
@@ -46,8 +47,18 @@ export interface AuctionEntry {
   penaltyApplied: number;
 }
 
+export interface PlacementOption {
+  position: Position;
+  overall: number;
+  penalty: number;
+  outOfPosition: boolean;
+}
+
+export type GameMode = "nba" | "cbb";
+
 export interface GameState {
   gameId: string;
+  gameMode: GameMode;
   p1Name: string;
   p2Name: string;
   p1Budget: number;
@@ -76,6 +87,8 @@ export interface GameState {
   openingTurn: 1 | 2;
   loserLastBid: number;
   firstPassUsed: boolean;
+  passedPool: NBAPlayer[];
+  isSecondChance: boolean;
 }
 
 export interface TeamTotals {
@@ -97,6 +110,18 @@ export interface SeriesResult {
   p1Wins: number;
   p2Wins: number;
   games: SeriesGame[];
+}
+
+interface OwnedRosterPlayer {
+  player: NBAPlayer;
+  cost: number | null;
+}
+
+interface PlayerAssignment {
+  owned: OwnedRosterPlayer;
+  slot: Position;
+  penalty: number;
+  preference: number;
 }
 
 function emptyRoster(): RosterSlot[] {
@@ -142,7 +167,67 @@ function playerStats(player: NBAPlayer): PlayerStats {
   };
 }
 
-function buildDraftPool(): NBAPlayer[] {
+// 2025 NCAA Tournament teams
+const MARCH_MADNESS_2025 = new Set([
+  "AUB", "DUKE", "HOU", "FLA",
+  "MSU", "ALA", "TENN", "SJU",
+  "WIS", "ISU", "UK", "TA&M",
+  "PUR", "MD", "MICH", "ARIZ",
+  "ORE", "CLEM", "MEM",
+  "MISS", "MIZ", "BYU", "OU",
+  "MARQ", "KU", "UCLA", "VAN",
+  "MSST", "CONN", "LOU", "GONZ",
+  "CREI", "UGA", "TEX", "SMC",
+  "UNM", "ARK", "COLO", "BAY",
+  "DRKE", "VCU", "GCU", "WAKE",
+  "LIB", "MCN", "UCSD",
+  "LIP", "YALE", "AKR",
+  "MTST", "RMU",
+]);
+
+function buildCBBDraftPool(): NBAPlayer[] {
+  const HIGH = 80;
+  const MM_FLOOR = 76;
+  const takenNames = new Set<string>();
+  const pool: NBAPlayer[] = [];
+
+  // target 6-8 March Madness players out of 10
+  // with k positions contributing 2 MM and (5-k) contributing 1 MM + 1 non-MM:
+  //   total MM = 2k + (5-k) = k+5  →  k = mmTarget-5
+  const mmTarget = 6 + Math.floor(Math.random() * 3); // 6, 7, or 8
+  const doubleMM = mmTarget - 5; // 1, 2, or 3
+  const shuffledPos = shuffle([...POSITIONS] as string[]);
+  const doubleMMSet = new Set(shuffledPos.slice(0, doubleMM));
+
+  for (const position of POSITIONS) {
+    const available = CBB_PLAYERS.filter((p) => p.position === position && !takenNames.has(p.name));
+    const mmHigh = shuffle(available.filter((p) => MARCH_MADNESS_2025.has(p.team) && p.rating >= HIGH));
+    const mmLow  = shuffle(available.filter((p) => MARCH_MADNESS_2025.has(p.team) && p.rating >= MM_FLOOR && p.rating < HIGH));
+    const nonMM  = shuffle(available.filter((p) => !MARCH_MADNESS_2025.has(p.team) && p.rating >= HIGH));
+    const mmAll  = [...mmHigh, ...mmLow];
+
+    const picked: NBAPlayer[] = [];
+
+    if (doubleMMSet.has(position)) {
+      // try for 2 MM players, fill remainder with non-MM
+      for (const p of mmAll) { if (picked.length >= 2) break; picked.push(p); }
+      for (const p of nonMM)  { if (picked.length >= 2) break; picked.push(p); }
+    } else {
+      // 1 MM + 1 non-MM
+      if (mmAll.length > 0) picked.push(mmAll[0]);
+      const second = nonMM.find((p) => !picked.includes(p)) ?? mmAll.find((p) => !picked.includes(p));
+      if (second) picked.push(second);
+    }
+
+    for (const p of picked) { takenNames.add(p.name); pool.push(p); }
+  }
+
+  return shuffle(pool);
+}
+
+function buildDraftPool(mode: GameMode = "nba"): NBAPlayer[] {
+  if (mode === "cbb") return buildCBBDraftPool();
+
   const takenNames = new Set<string>();
   const pool: NBAPlayer[] = [];
 
@@ -160,12 +245,33 @@ function buildDraftPool(): NBAPlayer[] {
   return shuffle(pool);
 }
 
-function createBaseGame(id: string, p1: string, p2: string, phase: GameState["phase"]): GameState {
-  const draftPool = buildDraftPool();
-  const firstPlayer = draftPool[0] ?? null;
+function hasOpenSlots(roster: RosterSlot[]): boolean {
+  return roster.some((slot) => slot.playerName === null);
+}
+
+export function getOpenSlotCount(roster: RosterSlot[]): number {
+  return roster.filter((slot) => slot.playerName === null).length;
+}
+
+function allSlotsFilled(state: Pick<GameState, "roster1" | "roster2">): boolean {
+  return !hasOpenSlots(state.roster1) && !hasOpenSlots(state.roster2);
+}
+
+function eligiblePositions(player: NBAPlayer): Position[] {
+  return player.eligiblePositions?.length ? player.eligiblePositions : [player.position];
+}
+
+function canPlayPosition(player: NBAPlayer, slotPosition: Position): boolean {
+  return eligiblePositions(player).includes(slotPosition);
+}
+
+function createBaseGame(id: string, p1: string, p2: string, phase: GameState["phase"], mode: GameMode = "nba"): GameState {
+  const seededPool = buildDraftPool(mode);
+  const [firstPlayer, ...draftPool] = seededPool;
 
   return {
     gameId: id,
+    gameMode: mode,
     p1Name: p1 || "Player 1",
     p2Name: p2 || "Player 2",
     p1Budget: STARTING_BUDGET,
@@ -175,20 +281,22 @@ function createBaseGame(id: string, p1: string, p2: string, phase: GameState["ph
     history: [],
     currentPlayer: firstPlayer,
     draftPool,
-    draftIndex: 0,
+    draftIndex: firstPlayer ? 1 : 0,
     phase,
     round: 1,
     lastResult: null,
+    passedPool: [],
+    isSecondChance: false,
     ...biddingDefaults(),
   };
 }
 
-export function createWaitingGame(id: string, p1: string): GameState {
-  return createBaseGame(id, p1, "Player 2", "waiting");
+export function createWaitingGame(id: string, p1: string, mode: GameMode = "nba"): GameState {
+  return createBaseGame(id, p1, "Player 2", "waiting", mode);
 }
 
-export function createGame(id: string, p1: string, p2: string): GameState {
-  return createBaseGame(id, p1, p2, "bidding");
+export function createGame(id: string, p1: string, p2: string, mode: GameMode = "nba"): GameState {
+  return createBaseGame(id, p1, p2, "bidding", mode);
 }
 
 export function applyRaise(state: GameState, player: 1 | 2, bidCents: number): GameState {
@@ -209,41 +317,189 @@ function positionDistance(a: Position, b: Position): number {
 
 function outOfPositionPenalty(playerPosition: Position, slotPosition: Position): number {
   if (playerPosition === slotPosition) return 0;
-  return 4 + positionDistance(playerPosition, slotPosition) * 3;
+  return 2 + positionDistance(playerPosition, slotPosition) * 2;
+}
+
+function slotPreferenceScore(player: NBAPlayer, slotPosition: Position): number {
+  const distance = positionDistance(player.position, slotPosition);
+  if (slotPosition === player.position) return distance;
+  if (canPlayPosition(player, slotPosition)) return 10 + distance;
+  return 100 + distance;
+}
+
+function placementPenalty(player: NBAPlayer, slotPosition: Position): number {
+  return canPlayPosition(player, slotPosition) ? 0 : outOfPositionPenalty(player.position, slotPosition);
+}
+
+function getPlayerByName(name: string): NBAPlayer | null {
+  return (
+    NBA_PLAYERS.find((player) => player.name === name) ??
+    CBB_PLAYERS.find((player) => player.name === name) ??
+    null
+  );
+}
+
+function rosterPlayers(roster: RosterSlot[]): OwnedRosterPlayer[] {
+  return roster.flatMap((slot) => {
+    if (!slot.playerName || !slot.stats || !slot.sourcePosition) return [];
+
+    const knownPlayer = getPlayerByName(slot.playerName);
+    const player: NBAPlayer = knownPlayer ?? {
+      name: slot.playerName,
+      team: slot.playerTeam ?? "Unknown",
+      position: slot.sourcePosition,
+      ppg: slot.stats.ppg,
+      rpg: slot.stats.rpg,
+      apg: slot.stats.apg,
+      fg_pct: slot.stats.fg_pct,
+      rating: slot.stats.rating,
+      tier: slot.stats.tier,
+    };
+
+    return [{ player, cost: slot.cost }];
+  });
+}
+
+function buildRosterFromAssignments(assignments: PlayerAssignment[]): RosterSlot[] {
+  const roster = emptyRoster();
+
+  for (const assignment of assignments) {
+    const idx = POSITIONS.indexOf(assignment.slot);
+    if (idx < 0) continue;
+    roster[idx] = {
+      position: assignment.slot,
+      playerName: assignment.owned.player.name,
+      playerTeam: assignment.owned.player.team,
+      sourcePosition: assignment.owned.player.position,
+      stats: playerStats(assignment.owned.player),
+      cost: assignment.owned.cost,
+      penalty: assignment.penalty,
+    };
+  }
+
+  return roster;
+}
+
+function chooseBestAssignments(
+  players: OwnedRosterPlayer[],
+  forcedPlayerName?: string,
+  forcedSlot?: Position,
+): PlayerAssignment[] | null {
+  let best: { penalty: number; preference: number; assignments: PlayerAssignment[] } | null = null;
+
+  function search(
+    remainingPlayers: OwnedRosterPlayer[],
+    openSlots: Position[],
+    currentAssignments: PlayerAssignment[],
+    penaltySum: number,
+    preferenceSum: number,
+  ) {
+    if (!remainingPlayers.length) {
+      if (
+        !best ||
+        penaltySum < best.penalty ||
+        (penaltySum === best.penalty && preferenceSum < best.preference)
+      ) {
+        best = {
+          penalty: penaltySum,
+          preference: preferenceSum,
+          assignments: currentAssignments.map((assignment) => ({ ...assignment })),
+        };
+      }
+      return;
+    }
+
+    const [owned, ...rest] = remainingPlayers;
+    const candidateSlots =
+      forcedPlayerName && forcedSlot && owned.player.name === forcedPlayerName
+        ? openSlots.filter((slot) => slot === forcedSlot)
+        : openSlots;
+
+    for (const slot of candidateSlots) {
+      const penalty = placementPenalty(owned.player, slot);
+      const preference = slotPreferenceScore(owned.player, slot);
+      const nextPenalty = penaltySum + penalty;
+      const nextPreference = preferenceSum + preference;
+
+      if (
+        best &&
+        (nextPenalty > best.penalty ||
+          (nextPenalty === best.penalty && nextPreference >= best.preference))
+      ) {
+        continue;
+      }
+
+      search(
+        rest,
+        openSlots.filter((openSlot) => openSlot !== slot),
+        [...currentAssignments, { owned, slot, penalty, preference }],
+        nextPenalty,
+        nextPreference,
+      );
+    }
+  }
+
+  search(players, [...POSITIONS], [], 0, 0);
+  const resolvedBest = best as { assignments: PlayerAssignment[] } | null;
+  return resolvedBest?.assignments ?? null;
+}
+
+export function getMaxBidForPlayer(state: GameState, playerNum: 1 | 2): number {
+  const roster = playerNum === 1 ? state.roster1 : state.roster2;
+  const budget = playerNum === 1 ? state.p1Budget : state.p2Budget;
+  const openSlots = getOpenSlotCount(roster);
+  if (openSlots <= 0) return 0;
+  return Math.max(0, budget - Math.max(0, openSlots - 1));
 }
 
 function assignPlayerToRoster(target: RosterSlot[], player: NBAPlayer, winningBid: number | null) {
-  const exactSlot = target.find((slot) => slot.position === player.position && slot.playerName === null);
-  const fallbackSlot = target
-    .filter((slot) => slot.playerName === null)
-    .sort((a, b) => positionDistance(player.position, a.position) - positionDistance(player.position, b.position))[0];
-  const chosenSlot = exactSlot ?? fallbackSlot ?? null;
+  return assignPlayerToRosterWithChoice(target, player, winningBid);
+}
 
-  if (!chosenSlot) {
+function assignPlayerToRosterWithChoice(
+  target: RosterSlot[],
+  player: NBAPlayer,
+  winningBid: number | null,
+  chosenPosition?: Position,
+) {
+  const players = [...rosterPlayers(target), { player, cost: winningBid }];
+  const assignments = chooseBestAssignments(players, player.name, chosenPosition);
+
+  if (!assignments) {
     return { roster: target, slotFilled: false, assignedSlot: null as Position | null, penaltyApplied: 0, outOfPosition: false };
   }
 
-  const penalty = outOfPositionPenalty(player.position, chosenSlot.position);
-  const updated = target.map((slot) => {
-    if (slot.position !== chosenSlot.position) return slot;
-    return {
-      ...slot,
-      playerName: player.name,
-      playerTeam: player.team,
-      sourcePosition: player.position,
-      stats: playerStats(player),
-      cost: winningBid,
-      penalty,
-    };
-  });
+  const assigned = assignments.find((assignment) => assignment.owned.player.name === player.name) ?? null;
+  if (!assigned) {
+    return { roster: target, slotFilled: false, assignedSlot: null as Position | null, penaltyApplied: 0, outOfPosition: false };
+  }
+
+  const updated = buildRosterFromAssignments(assignments);
 
   return {
     roster: updated,
     slotFilled: true,
-    assignedSlot: chosenSlot.position,
-    penaltyApplied: penalty,
-    outOfPosition: chosenSlot.position !== player.position,
+    assignedSlot: assigned.slot,
+    penaltyApplied: assigned.penalty,
+    outOfPosition: assigned.slot !== player.position,
   };
+}
+
+export function getPlacementOptions(roster: RosterSlot[], player: NBAPlayer, winningBid: number | null): PlacementOption[] {
+  return POSITIONS.map((position) => {
+    const assignment = assignPlayerToRosterWithChoice(roster, player, winningBid, position);
+    const assignedSlot = assignment.assignedSlot;
+    const overall = assignment.slotFilled
+      ? Math.max(40, player.rating - assignment.penaltyApplied)
+      : 0;
+
+    return {
+      position,
+      overall: assignedSlot === position ? overall : 0,
+      penalty: assignedSlot === position ? assignment.penaltyApplied : 0,
+      outOfPosition: assignedSlot === position ? assignment.outOfPosition : false,
+    };
+  });
 }
 
 export function applyPassResult(state: GameState): GameState {
@@ -262,22 +518,6 @@ export function applyPassResult(state: GameState): GameState {
   let assignedSlot: Position | null = null;
   let penaltyApplied = 0;
   let outOfPosition = false;
-
-  if (winner === 1) {
-    const assignment = assignPlayerToRoster(roster1, player, winningBid);
-    roster1 = assignment.roster;
-    slotFilled = assignment.slotFilled;
-    assignedSlot = assignment.assignedSlot;
-    penaltyApplied = assignment.penaltyApplied;
-    outOfPosition = assignment.outOfPosition;
-  } else if (winner === 2) {
-    const assignment = assignPlayerToRoster(roster2, player, winningBid);
-    roster2 = assignment.roster;
-    slotFilled = assignment.slotFilled;
-    assignedSlot = assignment.assignedSlot;
-    penaltyApplied = assignment.penaltyApplied;
-    outOfPosition = assignment.outOfPosition;
-  }
 
   const bid1 = winner === 1 ? state.currentBid : winner === 2 ? state.loserLastBid : 0;
   const bid2 = winner === 2 ? state.currentBid : winner === 1 ? state.loserLastBid : 0;
@@ -323,23 +563,71 @@ export function applyPassResult(state: GameState): GameState {
   };
 }
 
-export function advanceRound(state: GameState): GameState {
-  const nextIndex = state.draftIndex + 1;
-  const nextOpening: 1 | 2 = state.openingTurn === 1 ? 2 : 1;
+export function applyAssignmentChoice(state: GameState, playerNum: 1 | 2, chosenPosition: Position): GameState {
+  const result = state.lastResult;
+  if (state.phase !== "reveal" || !result || !result.winner || result.winner !== playerNum || result.assignedSlot) {
+    return state;
+  }
 
-  if (nextIndex >= state.draftPool.length) {
+  const winningBid = result.winner === 1 ? result.bid1 : result.bid2;
+  const targetRoster = result.winner === 1 ? state.roster1 : state.roster2;
+  const assignment = assignPlayerToRosterWithChoice(targetRoster, result.player, winningBid, chosenPosition);
+
+  if (!assignment.slotFilled || !assignment.assignedSlot) {
+    return state;
+  }
+
+  const updatedHistory = state.history.map((entry, index) => {
+    if (index !== state.history.length - 1) return entry;
     return {
-      ...state,
-      currentPlayer: null,
-      phase: "complete",
-      lastResult: null,
+      ...entry,
+      assignedSlot: assignment.assignedSlot,
+      penaltyApplied: assignment.penaltyApplied,
     };
+  });
+
+  return {
+    ...state,
+    roster1: result.winner === 1 ? assignment.roster : state.roster1,
+    roster2: result.winner === 2 ? assignment.roster : state.roster2,
+    history: updatedHistory,
+    lastResult: {
+      ...result,
+      slotFilled: assignment.slotFilled,
+      assignedSlot: assignment.assignedSlot,
+      penaltyApplied: assignment.penaltyApplied,
+      outOfPosition: assignment.outOfPosition,
+    },
+  };
+}
+
+export function advanceRound(state: GameState): GameState {
+  if (state.lastResult?.winner && !state.lastResult.assignedSlot) {
+    return state;
+  }
+
+  if (allSlotsFilled(state)) {
+    return { ...state, currentPlayer: null, phase: "complete", lastResult: null };
+  }
+
+  const nextOpening: 1 | 2 = state.openingTurn === 1 ? 2 : 1;
+  const passedByBoth = state.lastResult?.winner === null;
+  const recycledQueue = passedByBoth && state.lastResult
+    ? [...state.draftPool, state.lastResult.player]
+    : [...state.draftPool];
+  const [currentPlayer, ...nextDraftPool] = recycledQueue;
+
+  if (!currentPlayer) {
+    return { ...state, currentPlayer: null, phase: "complete", lastResult: null };
   }
 
   return {
     ...state,
-    currentPlayer: state.draftPool[nextIndex],
-    draftIndex: nextIndex,
+    currentPlayer,
+    draftPool: nextDraftPool,
+    passedPool: [],
+    isSecondChance: false,
+    draftIndex: state.draftIndex + 1,
     phase: "bidding",
     round: state.round + 1,
     lastResult: null,
@@ -378,7 +666,7 @@ export function teamTotals(slots: RosterSlot[]): TeamTotals {
 function teamStrength(slots: RosterSlot[]): number {
   const totals = teamTotals(slots);
   const rating = teamScore(slots);
-  return rating + totals.ppg * 0.32 + totals.rpg * 0.18 + totals.apg * 0.24 - totals.penalty * 0.45;
+  return 58 + rating * 0.25 + totals.ppg * 0.7 + totals.rpg * 0.4 + totals.apg * 0.8 - totals.penalty * 0.25;
 }
 
 function stringSeed(value: string): number {
@@ -412,8 +700,8 @@ export function simulateBestOfSeven(state: GameState): SeriesResult {
     const p1Performance = p1Strength + homeBonus + (rand() - 0.5) * 8;
     const p2Performance = p2Strength - homeBonus + (rand() - 0.5) * 8;
 
-    let p1Score = Math.round(84 + p1Performance + rand() * 14);
-    let p2Score = Math.round(84 + p2Performance + rand() * 14);
+    let p1Score = Math.round(p1Performance + rand() * 8);
+    let p2Score = Math.round(p2Performance + rand() * 8);
 
     if (p1Score === p2Score) {
       if (p1Performance >= p2Performance) p1Score += 1;

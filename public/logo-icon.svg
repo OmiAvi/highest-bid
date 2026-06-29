@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <radialGradient id="bg" cx="45%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#160F26"/>
+      <stop offset="100%" stop-color="#06050F"/>
+    </radialGradient>
+    <radialGradient id="orb" cx="35%" cy="30%" r="55%">
+      <stop offset="0%" stop-color="#FF2D78" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#FF2D78" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="90" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="90" fill="url(#orb)"/>
+
+  <!-- Subtle scanlines -->
+  <rect width="512" height="1" y="48"  fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="96"  fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="144" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="192" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="240" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="288" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="336" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="384" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="432" fill="rgba(0,0,0,0.10)"/>
+  <rect width="512" height="1" y="480" fill="rgba(0,0,0,0.10)"/>
+
+  <!-- Gavel (rotate -32° around center 256,256) -->
+  <g transform="rotate(-32, 256, 256)">
+    <!-- Head glow halo -->
+    <rect x="90" y="168" width="300" height="100" rx="22" fill="#FF2D78" opacity="0.25" filter="url(#glow)"/>
+
+    <!-- Gavel head -->
+    <rect x="90" y="168" width="300" height="100" rx="22" fill="#FF2D78"/>
+
+    <!-- Strike-plate band -->
+    <rect x="90" y="218" width="300" height="28" fill="rgba(0,0,0,0.22)"/>
+
+    <!-- Handle glow -->
+    <rect x="208" y="268" width="88" height="200" rx="22" fill="#FF2D78" opacity="0.20" filter="url(#soft)"/>
+
+    <!-- Handle -->
+    <rect x="208" y="268" width="88" height="200" rx="22" fill="#FF2D78"/>
+
+    <!-- Grip notches -->
+    <rect x="208" y="410" width="88" height="16" rx="8" fill="rgba(0,0,0,0.18)"/>
+    <rect x="208" y="440" width="88" height="16" rx="8" fill="rgba(0,0,0,0.12)"/>
+  </g>
+
+  <!-- Corner brackets (arcade frame) -->
+  <path d="M 440 30 L 490 30 L 490 80"  fill="none" stroke="#00E5FF" stroke-width="4" opacity="0.35"/>
+  <path d="M 22  432 L 22  482 L 72 482" fill="none" stroke="#FF2D78" stroke-width="4" opacity="0.35"/>
+</svg>
