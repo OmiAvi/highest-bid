@@ -1,356 +1,129 @@
-import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { useRouter } from "expo-router";
+import { useMemo, useRef, useState } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  Easing,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
-import { createGame, createLocalGame, joinGame, saveSession } from "@/lib/api";
-import type { GameMode } from "@/lib/game";
-import { GavelIcon } from "@/components/gavel-icon";
 import { ArcadeBackground } from "@/components/arcade-background";
-import { OnboardingSlides } from "@/components/onboarding-slides";
-import { Palette, Fonts, Spacing, Radius } from "@/constants/theme";
+import { ArcadeCabinet, cabinetGeometry } from "@/components/arcade-cabinet";
+import { Lobby } from "@/components/lobby";
+import { Palette } from "@/constants/theme";
 
-type Tab = "create" | "join" | "local";
-const ONBOARDING_KEY = "hb_seen_onboarding";
+const CREAM = "#F4E9D2";
 
-export default function LobbyScreen() {
-  const router = useRouter();
+// Show the arcade-cabinet intro only once per app session. Returning to the
+// home route after a game drops straight into the lobby.
+let introSeen = false;
+
+export default function HomeScreen() {
+  const { width: W, height: H } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  const [tab, setTab] = useState<Tab>("create");
-  const [name, setName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [localP1Name, setLocalP1Name] = useState("");
-  const [localP2Name, setLocalP2Name] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [gameMode, setGameMode] = useState<GameMode>("nba");
-  const [showSlides, setShowSlides] = useState(false);
+  const geo = useMemo(() => cabinetGeometry(W, H, insets), [W, H, insets]);
 
-  useEffect(() => {
-    AsyncStorage.getItem(ONBOARDING_KEY).then((v) => setShowSlides(!v));
-  }, []);
+  const [phase, setPhase] = useState<"cabinet" | "lobby">(introSeen ? "lobby" : "cabinet");
+  const progress = useSharedValue(introSeen ? 1 : 0);
+  const startedRef = useRef(false);
 
-  async function dismissSlides() {
-    await AsyncStorage.setItem(ONBOARDING_KEY, "1");
-    setShowSlides(false);
+  function handleStart() {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    introSeen = true;
+    progress.value = withTiming(1, { duration: 780, easing: Easing.inOut(Easing.cubic) }, (finished) => {
+      if (finished) runOnJS(setPhase)("lobby");
+    });
   }
 
-  async function handleCreate() {
-    setLoading(true);
-    setError("");
-    try {
-      const p1 = name.trim() || "Player 1";
-      const { gameId, token } = await createGame(p1, gameMode);
-      await saveSession(gameId, { role: "p1", token, playerName: p1 });
-      router.push(`/game/${gameId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create game");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // CRT screen window: grows from the cabinet's screen cutout to the full viewport.
+  const screenRadius = (5 / 100) * geo.cabinet.w;
+  const windowStyle = useAnimatedStyle(() => ({
+    left: interpolate(progress.value, [0, 1], [geo.screen.x, 0]),
+    top: interpolate(progress.value, [0, 1], [geo.screen.y, 0]),
+    width: interpolate(progress.value, [0, 1], [geo.screen.w, W]),
+    height: interpolate(progress.value, [0, 1], [geo.screen.h, H]),
+    borderRadius: interpolate(progress.value, [0, 1], [screenRadius, 0]),
+  }));
 
-  async function handleJoin() {
-    if (!joinCode.trim()) {
-      setError("Enter a join code");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const p2 = name.trim() || "Player 2";
-      const { gameId, token } = await joinGame(joinCode.trim(), p2);
-      await saveSession(gameId, { role: "p2", token, playerName: p2 });
-      router.push(`/game/${gameId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to join");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // The lobby is laid out at full-viewport size and scaled down into the screen.
+  const scalerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [geo.screen.w / W, 1]) }],
+  }));
 
-  async function handleLocal() {
-    setLoading(true);
-    setError("");
-    try {
-      const p1 = localP1Name.trim() || "Player 1";
-      const p2 = localP2Name.trim() || "Player 2";
-      const { gameId, token } = await createLocalGame(p1, p2, gameMode);
-      await saveSession(gameId, { mode: "local", role: "local", token, playerName: p1, player2Name: p2 });
-      router.push(`/game/${gameId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to start local game");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // While framed in the cabinet, nudge the lobby down so its title/wordmark
+  // (not the form card) sits in the CRT; eases back to 0 as the zoom completes.
+  const titleShift = H * 0.085;
+  const offsetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [titleShift, 0]) }],
+  }));
+
+  const crtBgStyle = useAnimatedStyle(() => ({ opacity: interpolate(progress.value, [0, 1], [1, 0]) }));
+  const sheenStyle = useAnimatedStyle(() => ({ opacity: interpolate(progress.value, [0, 0.7], [1, 0], "clamp") }));
+  const creamStyle = useAnimatedStyle(() => ({ opacity: interpolate(progress.value, [0, 1], [1, 0]) }));
+  const cabinetStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.62], [1, 0], "clamp"),
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.7]) }],
+  }));
+
+  const showChrome = phase !== "lobby";
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.root}>
+      {/* Animated neon backdrop — revealed as the cream cover fades out. */}
       <ArcadeBackground />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            { paddingTop: insets.top + Spacing.five, paddingBottom: insets.bottom + Spacing.five },
+
+      {/* Cream backdrop behind the cabinet. */}
+      {showChrome && <Animated.View style={[StyleSheet.absoluteFill, styles.cream, creamStyle]} pointerEvents="none" />}
+
+      {/* Cabinet chrome. */}
+      {showChrome && (
+        <Animated.View
+          style={[
+            styles.cabinet,
+            { left: geo.cabinet.x, top: geo.cabinet.y, width: geo.cabinet.w, height: geo.cabinet.h },
+            cabinetStyle,
           ]}
-          keyboardShouldPersistTaps="handled"
+          pointerEvents="box-none"
         >
-          <View style={styles.wrap}>
-            {/* Wordmark */}
-            <View style={styles.header}>
-              <View style={styles.logoRow}>
-                <GavelIcon size={28} />
-                <Text style={styles.logoText}>Highest Bid</Text>
-              </View>
-              <View style={styles.taglineRow}>
-                <Text style={styles.tagline}>NBA Draft Auction</Text>
-                <Pressable style={styles.howToBtn} onPress={() => setShowSlides(true)}>
-                  <Text style={styles.howToText}>How to play</Text>
-                </Pressable>
-              </View>
-            </View>
+          <ArcadeCabinet width={geo.cabinet.w} height={geo.cabinet.h} onStart={handleStart} />
+        </Animated.View>
+      )}
 
-            {showSlides ? (
-              <OnboardingSlides onDone={dismissSlides} />
-            ) : (
-              <View style={styles.card}>
-                {/* Mode picker */}
-                <View style={styles.modeRow}>
-                  {(["nba", "cbb"] as GameMode[]).map((m) => {
-                    const active = gameMode === m;
-                    return (
-                      <Pressable
-                        key={m}
-                        onPress={() => setGameMode(m)}
-                        style={[
-                          styles.modeBtn,
-                          {
-                            backgroundColor: active ? (m === "nba" ? Palette.gold : Palette.accent) : Palette.courtMid,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.modeText, { color: active ? "#fff" : Palette.whiteDim }]}>
-                          {m === "nba" ? "🏀 NBA" : "🎓 College"}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {/* Tabs */}
-                <View style={styles.tabs}>
-                  {(
-                    [
-                      ["create", "Online host"],
-                      ["join", "Join code"],
-                      ["local", "Same computer"],
-                    ] as [Tab, string][]
-                  ).map(([t, label]) => (
-                    <Pressable
-                      key={t}
-                      onPress={() => {
-                        setTab(t);
-                        setError("");
-                      }}
-                      style={[styles.tab, tab === t && styles.tabActive]}
-                    >
-                      <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {tab === "create" && (
-                  <View style={styles.form}>
-                    <Text style={styles.fieldLabel}>Your name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Player 1"
-                      placeholderTextColor={Palette.whiteDim}
-                      value={name}
-                      onChangeText={setName}
-                      maxLength={20}
-                    />
-                    {!!error && <Text style={styles.errMsg}>{error}</Text>}
-                    <PrimaryButton label="Create game" loadingLabel="Creating…" loading={loading} onPress={handleCreate} />
-                  </View>
-                )}
-
-                {tab === "join" && (
-                  <View style={styles.form}>
-                    <Text style={styles.fieldLabel}>Join code</Text>
-                    <TextInput
-                      style={[styles.input, styles.codeInput]}
-                      placeholder="ABCXYZ"
-                      placeholderTextColor={Palette.borderStrong}
-                      value={joinCode}
-                      onChangeText={(t) => setJoinCode(t.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 6))}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                      maxLength={6}
-                    />
-                    <Text style={styles.fieldLabel}>Your name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Player 2"
-                      placeholderTextColor={Palette.whiteDim}
-                      value={name}
-                      onChangeText={setName}
-                      maxLength={20}
-                    />
-                    {!!error && <Text style={styles.errMsg}>{error}</Text>}
-                    <PrimaryButton
-                      label="Join game"
-                      loadingLabel="Joining…"
-                      loading={loading}
-                      onPress={handleJoin}
-                      color={Palette.accent}
-                    />
-                  </View>
-                )}
-
-                {tab === "local" && (
-                  <View style={styles.form}>
-                    <Text style={styles.fieldLabel}>Player 1 name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Player 1"
-                      placeholderTextColor={Palette.whiteDim}
-                      value={localP1Name}
-                      onChangeText={setLocalP1Name}
-                      maxLength={20}
-                    />
-                    <Text style={styles.fieldLabel}>Player 2 name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Player 2"
-                      placeholderTextColor={Palette.whiteDim}
-                      value={localP2Name}
-                      onChangeText={setLocalP2Name}
-                      maxLength={20}
-                    />
-                    <Text style={styles.helperText}>
-                      Players share one device and pass it between turns.
-                    </Text>
-                    {!!error && <Text style={styles.errMsg}>{error}</Text>}
-                    <PrimaryButton
-                      label="Start same-device game"
-                      loadingLabel="Starting…"
-                      loading={loading}
-                      onPress={handleLocal}
-                    />
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      {/* CRT screen window holding the live lobby. */}
+      <Animated.View style={[styles.window, windowStyle]} pointerEvents={phase === "lobby" ? "auto" : "none"}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.crtBg, crtBgStyle]} pointerEvents="none" />
+        <View style={styles.center} pointerEvents={phase === "lobby" ? "box-none" : "none"}>
+          <Animated.View style={offsetStyle}>
+            <Animated.View style={[{ width: W, height: H }, scalerStyle]}>
+              <Lobby />
+            </Animated.View>
+          </Animated.View>
+        </View>
+        {showChrome && (
+          <Animated.View style={[StyleSheet.absoluteFill, sheenStyle]} pointerEvents="none">
+            <LinearGradient
+              colors={["rgba(255,255,255,0.10)", "rgba(255,255,255,0)", "rgba(0,0,0,0.18)"]}
+              locations={[0, 0.45, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        )}
+      </Animated.View>
     </View>
   );
 }
 
-function PrimaryButton({
-  label,
-  loadingLabel,
-  loading,
-  onPress,
-  color = Palette.gold,
-}: {
-  label: string;
-  loadingLabel: string;
-  loading: boolean;
-  onPress: () => void;
-  color?: string;
-}) {
-  return (
-    <Pressable
-      disabled={loading}
-      onPress={onPress}
-      style={[styles.primaryBtn, { backgroundColor: color, opacity: loading ? 0.7 : 1 }]}
-    >
-      {loading ? (
-        <View style={styles.btnLoading}>
-          <ActivityIndicator size="small" color="#fff" />
-          <Text style={styles.primaryBtnText}>{loadingLabel}</Text>
-        </View>
-      ) : (
-        <Text style={styles.primaryBtnText}>{label}</Text>
-      )}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Palette.court },
-  flex: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: Spacing.four },
-  wrap: { width: "100%", maxWidth: 480, alignSelf: "center", gap: Spacing.four },
-
-  header: { alignItems: "center", gap: Spacing.two },
-  logoRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two + 2 },
-  logoText: { fontFamily: Fonts.display, fontSize: 44, fontWeight: "800", color: Palette.white, letterSpacing: -1.3 },
-  taglineRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two + 2 },
-  tagline: { fontSize: 18, color: Palette.whiteDim, fontWeight: "500" },
-  howToBtn: { borderWidth: 1, borderColor: Palette.border, borderRadius: 20, paddingHorizontal: Spacing.three, paddingVertical: 3, opacity: 0.75 },
-  howToText: { fontSize: 11, color: Palette.whiteDim, letterSpacing: 0.4 },
-
-  card: {
-    backgroundColor: Palette.courtSurface,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    borderRadius: Radius.xl,
-    padding: Spacing.four,
-  },
-  modeRow: { flexDirection: "row", gap: Spacing.two, marginBottom: Spacing.three },
-  modeBtn: { flex: 1, paddingVertical: Spacing.two + 2, borderRadius: Radius.md, alignItems: "center" },
-  modeText: { fontFamily: Fonts.display, fontSize: 13, fontWeight: "700", letterSpacing: 0.5 },
-
-  tabs: { flexDirection: "row", gap: 2, marginBottom: Spacing.four, backgroundColor: Palette.courtMid, borderRadius: Radius.md, padding: 3 },
-  tab: { flex: 1, paddingVertical: Spacing.two - 1, borderRadius: Radius.sm, alignItems: "center" },
-  tabActive: { backgroundColor: Palette.courtSurface },
-  tabText: { fontFamily: Fonts.display, fontSize: 12, fontWeight: "600", color: Palette.whiteDim },
-  tabTextActive: { color: Palette.white },
-
-  form: { gap: Spacing.two },
-  fieldLabel: { fontSize: 12, fontWeight: "500", color: Palette.whiteDim, marginBottom: 2 },
-  input: {
-    backgroundColor: Palette.courtMid,
-    borderWidth: 1,
-    borderColor: Palette.borderStrong,
-    borderRadius: 7,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two + 2,
-    color: Palette.white,
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  codeInput: { fontFamily: Fonts.display, fontSize: 22, fontWeight: "700", letterSpacing: 6, color: Palette.accent, textAlign: "center" },
-  helperText: { fontSize: 12, color: Palette.whiteDim, lineHeight: 18, marginTop: 2 },
-  errMsg: {
-    fontSize: 12,
-    color: Palette.danger,
-    backgroundColor: "rgba(248,113,113,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.2)",
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    overflow: "hidden",
-  },
-  primaryBtn: { marginTop: Spacing.one, paddingVertical: Spacing.three, borderRadius: 7, alignItems: "center" },
-  primaryBtnText: { color: "#fff", fontFamily: Fonts.display, fontSize: 15, fontWeight: "600", letterSpacing: 0.3 },
-  btnLoading: { flexDirection: "row", alignItems: "center", gap: Spacing.two },
+  root: { flex: 1, backgroundColor: Palette.court },
+  cream: { backgroundColor: CREAM },
+  cabinet: { position: "absolute" },
+  window: { position: "absolute", overflow: "hidden" },
+  crtBg: { backgroundColor: Palette.court },
+  center: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
 });
