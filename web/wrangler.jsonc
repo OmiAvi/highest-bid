@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "highest-bid",
+  "main": "@tanstack/react-start/server-entry",
+  "compatibility_date": "2026-06-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".output/public"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "highest-bid-db",
+      "database_id": "37d0a766-af9b-43ec-b321-33d09e0bee0d"
+    }
+  ]
+}
