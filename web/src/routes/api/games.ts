@@ -14,7 +14,10 @@ export const Route = createFileRoute("/api/games")({
         const joinCode = genJoinCode();
         const p1Token = genId(16);
         const p1Name = (body.p1Name || "Player 1").trim().slice(0, 20);
-        const gameMode: GameMode = body.gameMode === "cbb" ? "cbb" : "nba";
+        const allowedModes: GameMode[] = ["nba", "cbb", "nfl", "cfb"];
+        const gameMode: GameMode = allowedModes.includes(body.gameMode as GameMode)
+          ? (body.gameMode as GameMode)
+          : "nba";
         const state = createWaitingGame(id, p1Name, gameMode);
 
         await insertGame({ id, player1Name: p1Name, joinCode, p1Token, stateJson: JSON.stringify(state) });

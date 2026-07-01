@@ -12,6 +12,13 @@ const MID  = "#0C0818";
 const DIM  = "#8892A4";
 const WHITE = "#F0F2F5";
 
+const MODE_TAGLINE: Record<string, string> = {
+  nba: "NBA Draft Auction",
+  cbb: "College Hoops Auction",
+  nfl: "NFL Draft Auction",
+  cfb: "College Football Auction",
+};
+
 function esc(v: string): string {
   return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -23,6 +30,7 @@ function trim(v: string, max = 18): string {
 function rosterRows(slots: RosterSlot[], x: number, y: number, color: string): string {
   const posColors: Record<string, string> = {
     PG: PINK, SG: "#BF5FFF", SF: CYAN, PF: "#FFB800", C: "#64FFDA",
+    QB: "#FF8A3D", RB: CYAN, WR: PINK, TE: "#64FFDA",
   };
   return slots.map((slot, i) => {
     const py = y + i * 66;
@@ -64,6 +72,9 @@ export async function createResultsShareImage(state: GameState, series: SeriesRe
   const p2s = teamScore(state.roster2);
   const spent1 = 20 - state.p1Budget;
   const spent2 = 20 - state.p2Budget;
+  const football = state.gameMode === "nfl" || state.gameMode === "cfb";
+  const ovrLabel = football ? "TEAM OVR" : "EFFECTIVE OVR";
+  const tagline = MODE_TAGLINE[state.gameMode] ?? "NBA Draft Auction";
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <defs>
@@ -92,7 +103,7 @@ export async function createResultsShareImage(state: GameState, series: SeriesRe
 
   <!-- ── HEADER ── -->
   <text x="54" y="90" fill="${WHITE}" font-size="28" font-weight="700" font-family="Arial,sans-serif" letter-spacing="1">HIGHEST BID</text>
-  <text x="54" y="124" fill="${DIM}" font-size="20" font-family="Arial,sans-serif">NBA Draft Auction · Game #${esc(state.gameId)}</text>
+  <text x="54" y="124" fill="${DIM}" font-size="20" font-family="Arial,sans-serif">${esc(tagline)} · Game #${esc(state.gameId)}</text>
   <line x1="54" y1="148" x2="${WIDTH - 54}" y2="148" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
 
   <!-- ── WINNER BANNER ── -->
@@ -109,9 +120,9 @@ export async function createResultsShareImage(state: GameState, series: SeriesRe
   <text x="72" y="372" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">PLAYER 1</text>
   <text x="72" y="408" fill="${WHITE}" font-size="28" font-weight="700" font-family="Arial Black,Arial,sans-serif">${esc(trim(state.p1Name, 14))}</text>
   <text x="72" y="472" fill="${PINK}" font-size="80" font-weight="800" font-family="Arial Black,Arial,sans-serif" letter-spacing="-3">${p1s}</text>
-  <text x="72" y="498" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">EFFECTIVE OVR</text>
-  <text x="72" y="530" fill="${DIM}" font-size="16" font-family="Arial,sans-serif">${p1t.ppg.toFixed(1)} PPG · ${p1t.rpg.toFixed(1)} RPG · ${p1t.apg.toFixed(1)} APG</text>
-  <text x="72" y="554" fill="${DIM}" font-size="14" font-family="Arial,sans-serif">Spent $${spent1} · Penalty ${p1t.penalty}</text>
+  <text x="72" y="498" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">${ovrLabel}</text>
+  ${football ? "" : `<text x="72" y="530" fill="${DIM}" font-size="16" font-family="Arial,sans-serif">${p1t.ppg.toFixed(1)} PPG · ${p1t.rpg.toFixed(1)} RPG · ${p1t.apg.toFixed(1)} APG</text>`}
+  <text x="72" y="554" fill="${DIM}" font-size="14" font-family="Arial,sans-serif">Spent $${spent1}${football ? "" : ` · Penalty ${p1t.penalty}`}</text>
 
   <!-- Series score center -->
   <text x="540" y="450" fill="${PINK}" font-size="96" font-weight="800" font-family="Arial Black,Arial,sans-serif" text-anchor="middle">${series.p1Wins}</text>
@@ -125,9 +136,9 @@ export async function createResultsShareImage(state: GameState, series: SeriesRe
   <text x="612" y="372" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">PLAYER 2</text>
   <text x="612" y="408" fill="${WHITE}" font-size="28" font-weight="700" font-family="Arial Black,Arial,sans-serif">${esc(trim(state.p2Name, 14))}</text>
   <text x="612" y="472" fill="${CYAN}" font-size="80" font-weight="800" font-family="Arial Black,Arial,sans-serif" letter-spacing="-3">${p2s}</text>
-  <text x="612" y="498" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">EFFECTIVE OVR</text>
-  <text x="612" y="530" fill="${DIM}" font-size="16" font-family="Arial,sans-serif">${p2t.ppg.toFixed(1)} PPG · ${p2t.rpg.toFixed(1)} RPG · ${p2t.apg.toFixed(1)} APG</text>
-  <text x="612" y="554" fill="${DIM}" font-size="14" font-family="Arial,sans-serif">Spent $${spent2} · Penalty ${p2t.penalty}</text>
+  <text x="612" y="498" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="2">${ovrLabel}</text>
+  ${football ? "" : `<text x="612" y="530" fill="${DIM}" font-size="16" font-family="Arial,sans-serif">${p2t.ppg.toFixed(1)} PPG · ${p2t.rpg.toFixed(1)} RPG · ${p2t.apg.toFixed(1)} APG</text>`}
+  <text x="612" y="554" fill="${DIM}" font-size="14" font-family="Arial,sans-serif">Spent $${spent2}${football ? "" : ` · Penalty ${p2t.penalty}`}</text>
 
   <!-- ── LINEUPS ── -->
   <text x="54" y="618" fill="${DIM}" font-size="14" font-weight="600" font-family="Arial,sans-serif" letter-spacing="3">LINEUPS</text>

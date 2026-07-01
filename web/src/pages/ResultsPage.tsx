@@ -3,7 +3,7 @@ import { useParams, Link } from "@tanstack/react-router";
 import type { GameState, RosterSlot } from "../lib/game";
 import { GavelIcon } from "../components/GavelIcon";
 import { teamScore, teamTotals, fmt$, STARTING_BUDGET, effectiveRating, simulateBestOfSeven } from "../lib/game";
-import { POSITIONS, POSITION_COLORS, POSITION_LABELS, TIER_COLORS } from "../lib/players";
+import { POSITION_COLORS, POSITION_LABELS, TIER_COLORS } from "../lib/players";
 import { loadSession, pollGame } from "../lib/api";
 import { createResultsShareImage } from "../lib/shareImage";
 import { getPlayerHeadshot } from "../lib/headshots";
@@ -36,6 +36,7 @@ export function ResultsPage() {
   const spent2 = STARTING_BUDGET - gs.p2Budget;
   const series = simulateBestOfSeven(gs);
   const winner = series.winner === 1 ? gs.p1Name : series.winner === 2 ? gs.p2Name : null;
+  const football = gs.gameMode === "nfl" || gs.gameMode === "cfb";
   const siteUrl = `${window.location.origin}${window.location.pathname}`;
 
   async function handleShareImage() {
@@ -93,7 +94,7 @@ export function ResultsPage() {
 
         {/* Score row */}
         <div style={pg.scoreRow}>
-          <ScoreCard name={gs.p1Name} score={s1} totals={t1} spent={spent1} won={winner === gs.p1Name} color="var(--gold)" num={1} />
+          <ScoreCard name={gs.p1Name} score={s1} totals={t1} spent={spent1} won={winner === gs.p1Name} color="var(--gold)" num={1} football={football} />
           <div style={pg.scoreCenter}>
             <div style={pg.scoreLine}>
               <span style={{ color: "var(--gold)" }}>{series.p1Wins}</span>
@@ -102,7 +103,7 @@ export function ResultsPage() {
             </div>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)" }}>BEST OF 7</div>
           </div>
-          <ScoreCard name={gs.p2Name} score={s2} totals={t2} spent={spent2} won={winner === gs.p2Name} color="var(--accent)" num={2} />
+          <ScoreCard name={gs.p2Name} score={s2} totals={t2} spent={spent2} won={winner === gs.p2Name} color="var(--accent)" num={2} football={football} />
         </div>
 
         <Section label="Series simulation">
@@ -126,16 +127,18 @@ export function ResultsPage() {
           </div>
         </Section>
 
-        {/* Stat comparison */}
-        <Section label="Stat comparison">
-          <div style={pg.card}>
-            {[
-              { label: "PPG", v1: t1.ppg, v2: t2.ppg, max: 36 },
-              { label: "RPG", v1: t1.rpg, v2: t2.rpg, max: 14 },
-              { label: "APG", v1: t1.apg, v2: t2.apg, max: 11 },
-            ].map(b => <StatBar key={b.label} {...b} />)}
-          </div>
-        </Section>
+        {/* Stat comparison (hoops only — football is scored on overall alone) */}
+        {!football && (
+          <Section label="Stat comparison">
+            <div style={pg.card}>
+              {[
+                { label: "PPG", v1: t1.ppg, v2: t2.ppg, max: 36 },
+                { label: "RPG", v1: t1.rpg, v2: t2.rpg, max: 14 },
+                { label: "APG", v1: t1.apg, v2: t2.apg, max: 11 },
+              ].map(b => <StatBar key={b.label} {...b} />)}
+            </div>
+          </Section>
+        )}
 
         {/* Lineups */}
         <Section label="Final lineups">
@@ -207,9 +210,9 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function ScoreCard({ name, score, totals, spent, won, color, num }: {
+function ScoreCard({ name, score, totals, spent, won, color, num, football }: {
   name: string; score: number; totals: { ppg: number; rpg: number; apg: number; penalty: number };
-  spent: number; won: boolean; color: string; num: 1 | 2;
+  spent: number; won: boolean; color: string; num: 1 | 2; football: boolean;
 }) {
   return (
     <div style={{
@@ -229,16 +232,18 @@ function ScoreCard({ name, score, totals, spent, won, color, num }: {
         <div style={{ fontFamily: "var(--font-d)", fontSize: 14, fontWeight: 600 }}>{name}</div>
       </div>
       <div style={{ fontFamily: "var(--font-d)", fontSize: "clamp(32px, 8vw, 48px)", fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.02em" }}>{score}</div>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)", marginBottom: 12 }}>EFFECTIVE OVR</div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
-        {[["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]].map(([l, v]) => (
-          <div key={l as string} style={{ textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 600, color }}>{(v as number).toFixed(1)}</div>
-            <div style={{ fontSize: 10, color: "var(--white-dim)" }}>{l as string}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 10 }}>Spent {fmt$(spent)} · Penalty {totals.penalty}</div>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--white-dim)", marginBottom: 12 }}>{football ? "TEAM OVR" : "EFFECTIVE OVR"}</div>
+      {!football && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
+          {[["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]].map(([l, v]) => (
+            <div key={l as string} style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-d)", fontSize: 15, fontWeight: 600, color }}>{(v as number).toFixed(1)}</div>
+              <div style={{ fontSize: 10, color: "var(--white-dim)" }}>{l as string}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "var(--white-dim)", marginTop: 10 }}>Spent {fmt$(spent)}{football ? "" : ` · Penalty ${totals.penalty}`}</div>
     </div>
   );
 }
@@ -271,13 +276,13 @@ function FullRoster({ name, slots, color, num }: { name: string; slots: RosterSl
         <div style={{ width: 20, height: 20, borderRadius: 5, background: color, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-d)", fontWeight: 700, fontSize: 10, color: "#fff" }}>P{num}</div>
         <div style={{ fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 600 }}>{name}</div>
       </div>
-      {POSITIONS.map(pos => {
-        const slot = slots.find(s => s.position === pos)!;
+      {slots.map((slot, i) => {
+        const pos = slot.position;
         const pc = POSITION_COLORS[pos];
         const tc = slot.stats ? TIER_COLORS[slot.stats.tier as keyof typeof TIER_COLORS] : "var(--white-dim)";
         const headshot = slot.playerName && slot.sourcePosition ? getPlayerHeadshot(slot.playerName, slot.sourcePosition) : null;
         return (
-          <div key={pos} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: pc, width: 20, flexShrink: 0 }}>{pos}</span>
             {slot.playerName ? (
               <>

@@ -1,6 +1,8 @@
 import type { Position } from "./players";
 import { ESPN_HEADSHOTS } from "./espnHeadshots";
 import { CBB_ESPN_HEADSHOTS } from "./cbbEspnHeadshots";
+import { NFL_ESPN_HEADSHOTS } from "./nflEspnHeadshots";
+import { CFB_ESPN_HEADSHOTS } from "./cfbEspnHeadshots";
 
 function hash(value: string): number {
   let h = 0;
@@ -26,10 +28,15 @@ const POSITION_TONES: Record<Position, [string, string]> = {
   SF: ["#00E5FF", "#7FF4FF"],
   PF: ["#FFB800", "#FFD566"],
   C:  ["#64FFDA", "#A8FFF0"],
+  QB: ["#FF8A3D", "#FFB27A"],
+  RB: ["#00E5FF", "#7FF4FF"],
+  WR: ["#FF2D78", "#FF7AB5"],
+  TE: ["#64FFDA", "#A8FFF0"],
 };
 
 export function getPlayerHeadshot(name: string, position: Position): string {
-  const espnHeadshot = ESPN_HEADSHOTS[name] ?? CBB_ESPN_HEADSHOTS[name];
+  const espnHeadshot =
+    ESPN_HEADSHOTS[name] ?? CBB_ESPN_HEADSHOTS[name] ?? NFL_ESPN_HEADSHOTS[name] ?? CFB_ESPN_HEADSHOTS[name];
   if (espnHeadshot) return espnHeadshot;
 
   const seed = hash(`${name}-${position}`);

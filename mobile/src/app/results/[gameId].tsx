@@ -16,7 +16,7 @@ import {
   effectiveRating,
   simulateBestOfSeven,
 } from "@/lib/game";
-import { POSITIONS, POSITION_COLORS, POSITION_LABELS, TIER_COLORS } from "@/lib/players";
+import { POSITION_COLORS, POSITION_LABELS, TIER_COLORS } from "@/lib/players";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { GavelIcon } from "@/components/gavel-icon";
 import { ShareCard } from "@/components/share-card";
@@ -48,6 +48,7 @@ export default function ResultsScreen() {
     );
   }
 
+  const football = gs.gameMode === "nfl" || gs.gameMode === "cfb";
   const s1 = teamScore(gs.roster1);
   const s2 = teamScore(gs.roster2);
   const t1 = teamTotals(gs.roster1);
@@ -103,7 +104,7 @@ export default function ResultsScreen() {
 
         {/* Score row */}
         <View style={styles.scoreRow}>
-          <ScoreCard name={gs.p1Name} score={s1} totals={t1} spent={spent1} won={winner === gs.p1Name} color={Palette.gold} num={1} />
+          <ScoreCard name={gs.p1Name} score={s1} totals={t1} spent={spent1} won={winner === gs.p1Name} color={Palette.gold} num={1} football={football} />
           <View style={styles.scoreCenter}>
             <Text style={styles.seriesLine}>
               <Text style={{ color: Palette.gold }}>{series.p1Wins}</Text>
@@ -112,7 +113,7 @@ export default function ResultsScreen() {
             </Text>
             <Text style={styles.bo7}>BEST OF 7</Text>
           </View>
-          <ScoreCard name={gs.p2Name} score={s2} totals={t2} spent={spent2} won={winner === gs.p2Name} color={Palette.accent} num={2} />
+          <ScoreCard name={gs.p2Name} score={s2} totals={t2} spent={spent2} won={winner === gs.p2Name} color={Palette.accent} num={2} football={football} />
         </View>
 
         {/* Series simulation */}
@@ -141,18 +142,20 @@ export default function ResultsScreen() {
           </View>
         </Section>
 
-        {/* Stat comparison */}
-        <Section label="Stat comparison">
-          <View style={styles.card}>
-            {[
-              { label: "PPG", v1: t1.ppg, v2: t2.ppg, max: 36 },
-              { label: "RPG", v1: t1.rpg, v2: t2.rpg, max: 14 },
-              { label: "APG", v1: t1.apg, v2: t2.apg, max: 11 },
-            ].map((b) => (
-              <StatBar key={b.label} {...b} />
-            ))}
-          </View>
-        </Section>
+        {/* Stat comparison (hoops only — football is scored on overall alone) */}
+        {!football && (
+          <Section label="Stat comparison">
+            <View style={styles.card}>
+              {[
+                { label: "PPG", v1: t1.ppg, v2: t2.ppg, max: 36 },
+                { label: "RPG", v1: t1.rpg, v2: t2.rpg, max: 14 },
+                { label: "APG", v1: t1.apg, v2: t2.apg, max: 11 },
+              ].map((b) => (
+                <StatBar key={b.label} {...b} />
+              ))}
+            </View>
+          </Section>
+        )}
 
         {/* Lineups */}
         <Section label="Final lineups">
@@ -247,6 +250,7 @@ function ScoreCard({
   won,
   color,
   num,
+  football,
 }: {
   name: string;
   score: number;
@@ -255,6 +259,7 @@ function ScoreCard({
   won: boolean;
   color: string;
   num: 1 | 2;
+  football: boolean;
 }) {
   return (
     <View style={[styles.scoreCard, { borderColor: won ? `${color}40` : Palette.border, backgroundColor: won ? `${color}0A` : Palette.courtSurface }]}>
@@ -268,17 +273,20 @@ function ScoreCard({
         </Text>
       </View>
       <Text style={[styles.scoreBig, { color }]}>{score}</Text>
-      <Text style={styles.scoreCaption}>EFFECTIVE OVR</Text>
-      <View style={styles.scoreStats}>
-        {([["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]] as [string, number][]).map(([l, v]) => (
-          <View key={l} style={styles.scoreStat}>
-            <Text style={[styles.scoreStatV, { color }]}>{v.toFixed(1)}</Text>
-            <Text style={styles.scoreStatL}>{l}</Text>
-          </View>
-        ))}
-      </View>
+      <Text style={styles.scoreCaption}>{football ? "TEAM OVR" : "EFFECTIVE OVR"}</Text>
+      {!football && (
+        <View style={styles.scoreStats}>
+          {([["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]] as [string, number][]).map(([l, v]) => (
+            <View key={l} style={styles.scoreStat}>
+              <Text style={[styles.scoreStatV, { color }]}>{v.toFixed(1)}</Text>
+              <Text style={styles.scoreStatL}>{l}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       <Text style={styles.scoreSpent}>
-        Spent {fmt$(spent)} · Penalty {totals.penalty}
+        Spent {fmt$(spent)}
+        {football ? "" : ` · Penalty ${totals.penalty}`}
       </Text>
     </View>
   );
@@ -313,11 +321,11 @@ function FullRoster({ name, slots, color, num }: { name: string; slots: RosterSl
           {name}
         </Text>
       </View>
-      {POSITIONS.map((pos) => {
-        const slot = slots.find((s) => s.position === pos)!;
+      {slots.map((slot, i) => {
+        const pos = slot.position;
         const tc = slot.stats ? TIER_COLORS[slot.stats.tier] : Palette.whiteDim;
         return (
-          <View key={pos} style={styles.fullRosterRow}>
+          <View key={i} style={styles.fullRosterRow}>
             <Text style={[styles.frPos, { color: POSITION_COLORS[pos] }]}>{pos}</Text>
             {slot.playerName && slot.sourcePosition ? (
               <>

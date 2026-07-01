@@ -3,7 +3,6 @@ import { View, Text, StyleSheet } from "react-native";
 
 import type { GameState, SeriesResult } from "@/lib/game";
 import { teamScore, teamTotals, effectiveRating } from "@/lib/game";
-import { POSITIONS } from "@/lib/players";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { GavelIcon } from "@/components/gavel-icon";
 import { Palette, Fonts, Spacing, Radius } from "@/constants/theme";
@@ -13,12 +12,20 @@ interface Props {
   series: SeriesResult;
 }
 
+const MODE_TAGLINE: Record<string, string> = {
+  nba: "NBA Draft Auction",
+  cbb: "College Hoops Auction",
+  nfl: "NFL Draft Auction",
+  cfb: "College Football Auction",
+};
+
 /**
  * A fixed-size, off-screen results card captured by react-native-view-shot to
  * produce the shareable PNG. Mirrors the web `shareImage.ts` content.
  */
 export const ShareCard = forwardRef<View, Props>(function ShareCard({ gs, series }, ref) {
   const winner = series.winner === 1 ? gs.p1Name : series.winner === 2 ? gs.p2Name : null;
+  const football = gs.gameMode === "nfl" || gs.gameMode === "cfb";
   const s1 = teamScore(gs.roster1);
   const s2 = teamScore(gs.roster2);
   const t1 = teamTotals(gs.roster1);
@@ -42,7 +49,7 @@ export const ShareCard = forwardRef<View, Props>(function ShareCard({ gs, series
       </Text>
 
       <View style={styles.scoreRow}>
-        <ShareScore name={gs.p1Name} score={s1} totals={t1} color={Palette.gold} num={1} won={winner === gs.p1Name} />
+        <ShareScore name={gs.p1Name} score={s1} totals={t1} color={Palette.gold} num={1} won={winner === gs.p1Name} football={football} />
         <View style={styles.scoreCenter}>
           <Text style={styles.seriesScore}>
             <Text style={{ color: Palette.gold }}>{series.p1Wins}</Text>
@@ -51,7 +58,7 @@ export const ShareCard = forwardRef<View, Props>(function ShareCard({ gs, series
           </Text>
           <Text style={styles.bo7}>BEST OF 7</Text>
         </View>
-        <ShareScore name={gs.p2Name} score={s2} totals={t2} color={Palette.accent} num={2} won={winner === gs.p2Name} />
+        <ShareScore name={gs.p2Name} score={s2} totals={t2} color={Palette.accent} num={2} won={winner === gs.p2Name} football={football} />
       </View>
 
       <View style={styles.lineups}>
@@ -59,7 +66,7 @@ export const ShareCard = forwardRef<View, Props>(function ShareCard({ gs, series
         <ShareLineup name={gs.p2Name} gs={gs} num={2} color={Palette.accent} />
       </View>
 
-      <Text style={styles.footer}>Play at Highest Bid · NBA Draft Auction</Text>
+      <Text style={styles.footer}>Play at Highest Bid · {MODE_TAGLINE[gs.gameMode]}</Text>
     </View>
   );
 });
@@ -71,6 +78,7 @@ function ShareScore({
   color,
   num,
   won,
+  football,
 }: {
   name: string;
   score: number;
@@ -78,6 +86,7 @@ function ShareScore({
   color: string;
   num: 1 | 2;
   won: boolean;
+  football: boolean;
 }) {
   return (
     <View style={[styles.scoreCard, { borderColor: won ? `${color}55` : Palette.border }]}>
@@ -90,15 +99,17 @@ function ShareScore({
         </Text>
       </View>
       <Text style={[styles.scoreBig, { color }]}>{score}</Text>
-      <Text style={styles.scoreCaption}>EFFECTIVE OVR</Text>
-      <View style={styles.scoreStats}>
-        {([["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]] as [string, number][]).map(([l, v]) => (
-          <View key={l} style={styles.scoreStat}>
-            <Text style={[styles.scoreStatV, { color }]}>{v.toFixed(1)}</Text>
-            <Text style={styles.scoreStatL}>{l}</Text>
-          </View>
-        ))}
-      </View>
+      <Text style={styles.scoreCaption}>{football ? "TEAM OVR" : "EFFECTIVE OVR"}</Text>
+      {!football && (
+        <View style={styles.scoreStats}>
+          {([["PPG", totals.ppg], ["RPG", totals.rpg], ["APG", totals.apg]] as [string, number][]).map(([l, v]) => (
+            <View key={l} style={styles.scoreStat}>
+              <Text style={[styles.scoreStatV, { color }]}>{v.toFixed(1)}</Text>
+              <Text style={styles.scoreStatL}>{l}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -115,10 +126,10 @@ function ShareLineup({ name, gs, num, color }: { name: string; gs: GameState; nu
           {name}
         </Text>
       </View>
-      {POSITIONS.map((pos) => {
-        const slot = slots.find((s) => s.position === pos)!;
+      {slots.map((slot, i) => {
+        const pos = slot.position;
         return (
-          <View key={pos} style={styles.lineupRow}>
+          <View key={i} style={styles.lineupRow}>
             <Text style={[styles.lineupPos, { color }]}>{pos}</Text>
             {slot.playerName && slot.sourcePosition ? (
               <>

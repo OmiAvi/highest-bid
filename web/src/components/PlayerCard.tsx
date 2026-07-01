@@ -1,5 +1,5 @@
 import type { NBAPlayer } from "../lib/players";
-import { POSITION_COLORS, TIER_COLORS } from "../lib/players";
+import { POSITION_COLORS, TIER_COLORS, isFootballPosition } from "../lib/players";
 import { getPlayerHeadshot } from "../lib/headshots";
 
 interface Props { player: NBAPlayer; animKey?: number | string; large?: boolean; }
@@ -16,6 +16,7 @@ export function PlayerCard({ player, animKey, large }: Props) {
   const tc = TIER_COLORS[player.tier];
   const headshot = getPlayerHeadshot(player.name, player.position);
   const imgSize = large ? 180 : 140;
+  const football = isFootballPosition(player.position);
 
   return (
     <div key={animKey} style={{
@@ -80,30 +81,32 @@ export function PlayerCard({ player, animKey, large }: Props) {
           </div>
         </div>
 
-        {/* Stats row */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "repeat(4,1fr)",
-          gap: 1, borderRadius: 7, overflow: "hidden",
-          border: "1px solid var(--border)",
-        }}>
-          {[
-            { label: "PPG", value: player.ppg.toFixed(1) },
-            { label: "RPG", value: player.rpg.toFixed(1) },
-            { label: "APG", value: player.apg.toFixed(1) },
-            { label: "FG%", value: `${player.fg_pct.toFixed(1)}` },
-          ].map(({ label, value }) => (
-            <div key={label} style={{
-              background: "var(--court-mid)", padding: large ? "14px 8px" : "12px 8px", textAlign: "center",
-            }}>
-              <div style={{ fontFamily: "var(--font-d)", fontSize: large ? 24 : 20, fontWeight: 600, color: "var(--white)", lineHeight: 1 }}>
-                {value}
+        {/* Stats row (hoops only — football is scored on overall alone) */}
+        {!football && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(4,1fr)",
+            gap: 1, borderRadius: 7, overflow: "hidden",
+            border: "1px solid var(--border)",
+          }}>
+            {[
+              { label: "PPG", value: player.ppg.toFixed(1) },
+              { label: "RPG", value: player.rpg.toFixed(1) },
+              { label: "APG", value: player.apg.toFixed(1) },
+              { label: "FG%", value: `${player.fg_pct.toFixed(1)}` },
+            ].map(({ label, value }) => (
+              <div key={label} style={{
+                background: "var(--court-mid)", padding: large ? "14px 8px" : "12px 8px", textAlign: "center",
+              }}>
+                <div style={{ fontFamily: "var(--font-d)", fontSize: large ? 24 : 20, fontWeight: 600, color: "var(--white)", lineHeight: 1 }}>
+                  {value}
+                </div>
+                <div style={{ fontSize: large ? 11 : 10, fontWeight: 500, letterSpacing: "0.08em", color: "var(--white-dim)", marginTop: 3 }}>
+                  {label}
+                </div>
               </div>
-              <div style={{ fontSize: large ? 11 : 10, fontWeight: 500, letterSpacing: "0.08em", color: "var(--white-dim)", marginTop: 3 }}>
-                {label}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

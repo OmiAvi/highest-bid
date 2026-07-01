@@ -1,5 +1,14 @@
-import { NBA_PLAYERS, POSITIONS, type Position, type NBAPlayer } from "./players";
+import {
+  NBA_PLAYERS,
+  POSITIONS,
+  FOOTBALL_POSITIONS,
+  isFootballPosition,
+  type Position,
+  type NBAPlayer,
+} from "./players";
 import { CBB_PLAYERS } from "./cbbPlayers";
+import { NFL_PLAYERS } from "./nflPlayers";
+import { CFB_PLAYERS } from "./cfbPlayers";
 
 export const STARTING_BUDGET = 20; // dollars
 export const DRAFT_PLAYERS_PER_POSITION = 2;
@@ -54,7 +63,7 @@ export interface PlacementOption {
   outOfPosition: boolean;
 }
 
-export type GameMode = "nba" | "cbb";
+export type GameMode = "nba" | "cbb" | "nfl" | "cfb";
 
 export interface GameState {
   gameId: string;
@@ -119,13 +128,49 @@ interface OwnedRosterPlayer {
 
 interface PlayerAssignment {
   owned: OwnedRosterPlayer;
-  slot: Position;
+  slotIndex: number;
+  slotPosition: Position;
   penalty: number;
   preference: number;
 }
 
-function emptyRoster(): RosterSlot[] {
-  return POSITIONS.map((pos) => ({
+// ── Mode / roster shape ───────────────────────────────────────────────────────
+// Basketball fields exactly one player per position. Football fields duplicate
+// slots (1 QB, 2 RB, 3 WR, 1 TE), so roster slots are addressed by index, not by
+// a unique position key.
+const FOOTBALL_ROSTER: Position[] = ["QB", "RB", "RB", "WR", "WR", "WR", "TE"];
+
+export function isFootballMode(mode: GameMode): boolean {
+  return mode === "nfl" || mode === "cfb";
+}
+
+function rosterTemplate(mode: GameMode): Position[] {
+  return isFootballMode(mode) ? [...FOOTBALL_ROSTER] : [...POSITIONS];
+}
+
+function templateOf(roster: RosterSlot[]): Position[] {
+  return roster.map((slot) => slot.position);
+}
+
+function isFootballTemplate(template: Position[]): boolean {
+  return template.some((pos) => isFootballPosition(pos));
+}
+
+function datasetForMode(mode: GameMode): NBAPlayer[] {
+  switch (mode) {
+    case "cbb":
+      return CBB_PLAYERS;
+    case "nfl":
+      return NFL_PLAYERS;
+    case "cfb":
+      return CFB_PLAYERS;
+    default:
+      return NBA_PLAYERS;
+  }
+}
+
+function emptyRosterFromTemplate(template: Position[]): RosterSlot[] {
+  return template.map((pos) => ({
     position: pos,
     playerName: null,
     playerTeam: null,
@@ -134,6 +179,10 @@ function emptyRoster(): RosterSlot[] {
     cost: null,
     penalty: 0,
   }));
+}
+
+function emptyRoster(mode: GameMode): RosterSlot[] {
+  return emptyRosterFromTemplate(rosterTemplate(mode));
 }
 
 function biddingDefaults(): Pick<GameState, "currentBid" | "currentLeader" | "biddingTurn" | "openingTurn" | "loserLastBid" | "firstPassUsed"> {
@@ -225,8 +274,40 @@ function buildCBBDraftPool(): NBAPlayer[] {
   return shuffle(pool);
 }
 
+// Football pool holds exactly enough of each position to fill both rosters
+// (2 QB, 4 RB, 6 WR, 2 TE = twice the single-team roster), matching the
+// basketball pool's "DRAFT_PLAYERS_PER_POSITION per slot" shape.
+const FOOTBALL_POOL_NEED: Record<Position, number> = {
+  QB: 2,
+  RB: 4,
+  WR: 6,
+  TE: 2,
+  // basketball positions never appear in a football pool
+  PG: 0, SG: 0, SF: 0, PF: 0, C: 0,
+};
+
+function buildFootballDraftPool(dataset: NBAPlayer[]): NBAPlayer[] {
+  const takenNames = new Set<string>();
+  const pool: NBAPlayer[] = [];
+
+  for (const position of FOOTBALL_POSITIONS) {
+    const need = FOOTBALL_POOL_NEED[position] ?? 2;
+    const options = shuffle(
+      dataset.filter((player) => player.position === position && !takenNames.has(player.name))
+    ).slice(0, need);
+
+    for (const player of options) {
+      takenNames.add(player.name);
+      pool.push(player);
+    }
+  }
+
+  return shuffle(pool);
+}
+
 function buildDraftPool(mode: GameMode = "nba"): NBAPlayer[] {
   if (mode === "cbb") return buildCBBDraftPool();
+  if (isFootballMode(mode)) return buildFootballDraftPool(datasetForMode(mode));
 
   const takenNames = new Set<string>();
   const pool: NBAPlayer[] = [];
@@ -276,8 +357,8 @@ function createBaseGame(id: string, p1: string, p2: string, phase: GameState["ph
     p2Name: p2 || "Player 2",
     p1Budget: STARTING_BUDGET,
     p2Budget: STARTING_BUDGET,
-    roster1: emptyRoster(),
-    roster2: emptyRoster(),
+    roster1: emptyRoster(mode),
+    roster2: emptyRoster(mode),
     history: [],
     currentPlayer: firstPlayer,
     draftPool,
@@ -312,7 +393,7 @@ export function applyRaise(state: GameState, player: 1 | 2, bidCents: number): G
 }
 
 function positionDistance(a: Position, b: Position): number {
-  return Math.abs(POSITIONS.indexOf(a) - POSITIONS.indexOf(b));
+  return Math.abs(POSITIONS.indexOf(a as (typeof POSITIONS)[number]) - POSITIONS.indexOf(b as (typeof POSITIONS)[number]));
 }
 
 function outOfPositionPenalty(playerPosition: Position, slotPosition: Position): number {
@@ -335,6 +416,8 @@ function getPlayerByName(name: string): NBAPlayer | null {
   return (
     NBA_PLAYERS.find((player) => player.name === name) ??
     CBB_PLAYERS.find((player) => player.name === name) ??
+    NFL_PLAYERS.find((player) => player.name === name) ??
+    CFB_PLAYERS.find((player) => player.name === name) ??
     null
   );
 }
@@ -343,31 +426,38 @@ function rosterPlayers(roster: RosterSlot[]): OwnedRosterPlayer[] {
   return roster.flatMap((slot) => {
     if (!slot.playerName || !slot.stats || !slot.sourcePosition) return [];
 
+    // Only trust the global name lookup when its position agrees with the slot's
+    // source position — names can collide across datasets (e.g. a CFB receiver
+    // sharing a name with a college-basketball guard), and a wrong-position
+    // match would corrupt placement (especially football's strict slots).
     const knownPlayer = getPlayerByName(slot.playerName);
-    const player: NBAPlayer = knownPlayer ?? {
-      name: slot.playerName,
-      team: slot.playerTeam ?? "Unknown",
-      position: slot.sourcePosition,
-      ppg: slot.stats.ppg,
-      rpg: slot.stats.rpg,
-      apg: slot.stats.apg,
-      fg_pct: slot.stats.fg_pct,
-      rating: slot.stats.rating,
-      tier: slot.stats.tier,
-    };
+    const player: NBAPlayer =
+      knownPlayer && knownPlayer.position === slot.sourcePosition
+        ? knownPlayer
+        : {
+            name: slot.playerName,
+            team: slot.playerTeam ?? "Unknown",
+            position: slot.sourcePosition,
+            ppg: slot.stats.ppg,
+            rpg: slot.stats.rpg,
+            apg: slot.stats.apg,
+            fg_pct: slot.stats.fg_pct,
+            rating: slot.stats.rating,
+            tier: slot.stats.tier,
+          };
 
     return [{ player, cost: slot.cost }];
   });
 }
 
-function buildRosterFromAssignments(assignments: PlayerAssignment[]): RosterSlot[] {
-  const roster = emptyRoster();
+function buildRosterFromAssignments(template: Position[], assignments: PlayerAssignment[]): RosterSlot[] {
+  const roster = emptyRosterFromTemplate(template);
 
   for (const assignment of assignments) {
-    const idx = POSITIONS.indexOf(assignment.slot);
-    if (idx < 0) continue;
+    const idx = assignment.slotIndex;
+    if (idx < 0 || idx >= roster.length) continue;
     roster[idx] = {
-      position: assignment.slot,
+      position: template[idx],
       playerName: assignment.owned.player.name,
       playerTeam: assignment.owned.player.team,
       sourcePosition: assignment.owned.player.position,
@@ -380,16 +470,24 @@ function buildRosterFromAssignments(assignments: PlayerAssignment[]): RosterSlot
   return roster;
 }
 
+interface SlotRef {
+  index: number;
+  position: Position;
+}
+
 function chooseBestAssignments(
+  template: Position[],
   players: OwnedRosterPlayer[],
   forcedPlayerName?: string,
-  forcedSlot?: Position,
+  forcedPosition?: Position,
 ): PlayerAssignment[] | null {
+  const strict = isFootballTemplate(template);
+  const allSlots: SlotRef[] = template.map((position, index) => ({ index, position }));
   let best: { penalty: number; preference: number; assignments: PlayerAssignment[] } | null = null;
 
   function search(
     remainingPlayers: OwnedRosterPlayer[],
-    openSlots: Position[],
+    openSlots: SlotRef[],
     currentAssignments: PlayerAssignment[],
     penaltySum: number,
     preferenceSum: number,
@@ -411,13 +509,17 @@ function chooseBestAssignments(
 
     const [owned, ...rest] = remainingPlayers;
     const candidateSlots =
-      forcedPlayerName && forcedSlot && owned.player.name === forcedPlayerName
-        ? openSlots.filter((slot) => slot === forcedSlot)
+      forcedPlayerName && forcedPosition && owned.player.name === forcedPlayerName
+        ? openSlots.filter((slot) => slot.position === forcedPosition)
         : openSlots;
 
     for (const slot of candidateSlots) {
-      const penalty = placementPenalty(owned.player, slot);
-      const preference = slotPreferenceScore(owned.player, slot);
+      const fits = canPlayPosition(owned.player, slot.position);
+      // Football is strict: a player can only fill a slot of its own position.
+      if (strict && !fits) continue;
+
+      const penalty = placementPenalty(owned.player, slot.position);
+      const preference = strict ? 0 : slotPreferenceScore(owned.player, slot.position);
       const nextPenalty = penaltySum + penalty;
       const nextPreference = preferenceSum + preference;
 
@@ -431,15 +533,15 @@ function chooseBestAssignments(
 
       search(
         rest,
-        openSlots.filter((openSlot) => openSlot !== slot),
-        [...currentAssignments, { owned, slot, penalty, preference }],
+        openSlots.filter((openSlot) => openSlot.index !== slot.index),
+        [...currentAssignments, { owned, slotIndex: slot.index, slotPosition: slot.position, penalty, preference }],
         nextPenalty,
         nextPreference,
       );
     }
   }
 
-  search(players, [...POSITIONS], [], 0, 0);
+  search(players, allSlots, [], 0, 0);
   const resolvedBest = best as { assignments: PlayerAssignment[] } | null;
   return resolvedBest?.assignments ?? null;
 }
@@ -449,6 +551,15 @@ export function getMaxBidForPlayer(state: GameState, playerNum: 1 | 2): number {
   const budget = playerNum === 1 ? state.p1Budget : state.p2Budget;
   const openSlots = getOpenSlotCount(roster);
   if (openSlots <= 0) return 0;
+
+  // Football has fixed per-position slots (no out-of-position play), so you can
+  // only bid on the current player if you still have an open slot for it.
+  if (isFootballMode(state.gameMode) && state.currentPlayer) {
+    const pos = state.currentPlayer.position;
+    const openForPos = roster.filter((slot) => slot.position === pos && slot.playerName === null).length;
+    if (openForPos <= 0) return 0;
+  }
+
   return Math.max(0, budget - Math.max(0, openSlots - 1));
 }
 
@@ -458,8 +569,9 @@ function assignPlayerToRosterWithChoice(
   winningBid: number | null,
   chosenPosition?: Position,
 ) {
+  const template = templateOf(target);
   const players = [...rosterPlayers(target), { player, cost: winningBid }];
-  const assignments = chooseBestAssignments(players, player.name, chosenPosition);
+  const assignments = chooseBestAssignments(template, players, player.name, chosenPosition);
 
   if (!assignments) {
     return { roster: target, slotFilled: false, assignedSlot: null as Position | null, penaltyApplied: 0, outOfPosition: false };
@@ -470,19 +582,23 @@ function assignPlayerToRosterWithChoice(
     return { roster: target, slotFilled: false, assignedSlot: null as Position | null, penaltyApplied: 0, outOfPosition: false };
   }
 
-  const updated = buildRosterFromAssignments(assignments);
+  const updated = buildRosterFromAssignments(template, assignments);
 
   return {
     roster: updated,
     slotFilled: true,
-    assignedSlot: assigned.slot,
+    assignedSlot: assigned.slotPosition,
     penaltyApplied: assigned.penalty,
-    outOfPosition: assigned.slot !== player.position,
+    outOfPosition: assigned.slotPosition !== player.position,
   };
 }
 
 export function getPlacementOptions(roster: RosterSlot[], player: NBAPlayer, winningBid: number | null): PlacementOption[] {
-  return POSITIONS.map((position) => {
+  const template = templateOf(roster);
+  const strict = isFootballTemplate(template);
+  const positions: readonly Position[] = strict ? FOOTBALL_POSITIONS : POSITIONS;
+
+  const options = positions.map((position) => {
     const assignment = assignPlayerToRosterWithChoice(roster, player, winningBid, position);
     const assignedSlot = assignment.assignedSlot;
     const overall = assignment.slotFilled
@@ -496,6 +612,10 @@ export function getPlacementOptions(roster: RosterSlot[], player: NBAPlayer, win
       outOfPosition: assignedSlot === position ? assignment.outOfPosition : false,
     };
   });
+
+  // Football has no out-of-position play, so only the player's own position is a
+  // valid destination — surface just that one so the winner confirms placement.
+  return strict ? options.filter((option) => option.position === player.position) : options;
 }
 
 export function applyPassResult(state: GameState): GameState {
@@ -660,8 +780,12 @@ export function teamTotals(slots: RosterSlot[]): TeamTotals {
 }
 
 function teamStrength(slots: RosterSlot[]): number {
-  const totals = teamTotals(slots);
   const rating = teamScore(slots);
+  // Football is scored on overall alone (no hoops box-score stats).
+  if (isFootballTemplate(templateOf(slots))) {
+    return rating;
+  }
+  const totals = teamTotals(slots);
   return 58 + rating * 0.25 + totals.ppg * 0.7 + totals.rpg * 0.4 + totals.apg * 0.8 - totals.penalty * 0.25;
 }
 
