@@ -1,4 +1,4 @@
-import { POSITIONS, POSITION_COLORS, POSITION_LABELS } from "../lib/players";
+import { POSITION_COLORS, POSITION_LABELS } from "../lib/players";
 import type { RosterSlot } from "../lib/game";
 import { effectiveRating, fmt$ } from "../lib/game";
 import { getPlayerHeadshot } from "../lib/headshots";
@@ -37,19 +37,19 @@ export function RosterPanel({ name, slots, budget, num }: Props) {
           </div>
         </div>
         <div style={{ fontSize: 11, color: "var(--white-dim)", fontVariantNumeric: "tabular-nums" }}>
-          {filledCount}/5 · {fmt$(budget)}
+          {filledCount}/{slots.length} · {fmt$(budget)}
         </div>
       </div>
 
       {/* Slots */}
-      {POSITIONS.map((pos) => {
-        const slot = slots.find((s) => s.position === pos)!;
+      {slots.map((slot, i) => {
+        const pos = slot.position;
         const pc = POSITION_COLORS[pos];
         const filled = slot.playerName !== null;
         const headshot = filled && slot.sourcePosition ? getPlayerHeadshot(slot.playerName!, slot.sourcePosition) : null;
 
         return (
-          <div key={pos} style={{
+          <div key={i} style={{
             display: "flex", alignItems: "center", gap: 8,
             padding: "8px 12px",
             borderBottom: "1px solid var(--border)",

@@ -1,5 +1,16 @@
 export const POSITIONS = ["PG", "SG", "SF", "PF", "C"] as const;
-export type Position = (typeof POSITIONS)[number];
+export type BasketballPosition = (typeof POSITIONS)[number];
+
+// Football positions used by the NFL / CFB modes. These reuse the NBAPlayer
+// shape (rating = Madden/CFB overall; the hoops stat fields stay 0).
+export const FOOTBALL_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
+export type FootballPosition = (typeof FOOTBALL_POSITIONS)[number];
+
+export type Position = BasketballPosition | FootballPosition;
+
+export function isFootballPosition(pos: Position): boolean {
+  return (FOOTBALL_POSITIONS as readonly string[]).includes(pos);
+}
 
 export interface NBAPlayer {
   name: string;
@@ -113,6 +124,10 @@ export const POSITION_LABELS: Record<Position, string> = {
   SF: "Small Forward",
   PF: "Power Forward",
   C:  "Center",
+  QB: "Quarterback",
+  RB: "Running Back",
+  WR: "Wide Receiver",
+  TE: "Tight End",
 };
 
 export const POSITION_COLORS: Record<Position, string> = {
@@ -121,6 +136,10 @@ export const POSITION_COLORS: Record<Position, string> = {
   SF: "#00E5FF",
   PF: "#FFB800",
   C:  "#64FFDA",
+  QB: "#FF8A3D",
+  RB: "#00E5FF",
+  WR: "#FF2D78",
+  TE: "#64FFDA",
 };
 
 export const TIER_COLORS: Record<NBAPlayer["tier"], string> = {

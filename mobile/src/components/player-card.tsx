@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
 import type { NBAPlayer } from "@/lib/players";
-import { POSITION_COLORS, TIER_COLORS } from "@/lib/players";
+import { POSITION_COLORS, TIER_COLORS, isFootballPosition } from "@/lib/players";
 import { PlayerAvatar } from "@/components/player-avatar";
 import { Palette, Fonts, Spacing, Radius } from "@/constants/theme";
 
@@ -22,6 +22,7 @@ interface Props {
 export function PlayerCard({ player, animKey }: Props) {
   const pc = POSITION_COLORS[player.position];
   const tc = TIER_COLORS[player.tier];
+  const football = isFootballPosition(player.position);
 
   return (
     <Animated.View key={animKey} entering={FadeIn.duration(220)} style={styles.card}>
@@ -56,19 +57,21 @@ export function PlayerCard({ player, animKey }: Props) {
           </View>
         </View>
 
-        <View style={styles.statsRow}>
-          {[
-            { label: "PPG", value: player.ppg.toFixed(1) },
-            { label: "RPG", value: player.rpg.toFixed(1) },
-            { label: "APG", value: player.apg.toFixed(1) },
-            { label: "FG%", value: player.fg_pct.toFixed(1) },
-          ].map(({ label, value }) => (
-            <View key={label} style={styles.statCell}>
-              <Text style={styles.statValue}>{value}</Text>
-              <Text style={styles.statLabel}>{label}</Text>
-            </View>
-          ))}
-        </View>
+        {!football && (
+          <View style={styles.statsRow}>
+            {[
+              { label: "PPG", value: player.ppg.toFixed(1) },
+              { label: "RPG", value: player.rpg.toFixed(1) },
+              { label: "APG", value: player.apg.toFixed(1) },
+              { label: "FG%", value: player.fg_pct.toFixed(1) },
+            ].map(({ label, value }) => (
+              <View key={label} style={styles.statCell}>
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </Animated.View>
   );

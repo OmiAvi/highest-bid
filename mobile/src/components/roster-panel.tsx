@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 
-import { POSITIONS, POSITION_COLORS, POSITION_LABELS } from "@/lib/players";
+import { POSITION_COLORS, POSITION_LABELS } from "@/lib/players";
 import type { RosterSlot } from "@/lib/game";
 import { effectiveRating, fmt$ } from "@/lib/game";
 import { PlayerAvatar } from "@/components/player-avatar";
@@ -29,17 +29,17 @@ export function RosterPanel({ name, slots, budget, num }: Props) {
           </Text>
         </View>
         <Text style={styles.meta}>
-          {filledCount}/5 · {fmt$(budget)}
+          {filledCount}/{slots.length} · {fmt$(budget)}
         </Text>
       </View>
 
-      {POSITIONS.map((pos) => {
-        const slot = slots.find((s) => s.position === pos)!;
+      {slots.map((slot, i) => {
+        const pos = slot.position;
         const pc = POSITION_COLORS[pos];
         const filled = slot.playerName !== null;
 
         return (
-          <View key={pos} style={[styles.row, { opacity: filled ? 1 : 0.4 }]}>
+          <View key={i} style={[styles.row, { opacity: filled ? 1 : 0.4 }]}>
             <Text style={[styles.pos, { color: pc }]}>{pos}</Text>
 
             {filled && slot.sourcePosition ? (

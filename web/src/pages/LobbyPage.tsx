@@ -8,6 +8,20 @@ import { GavelIcon } from "../components/GavelIcon";
 
 type Tab = "create" | "join" | "local";
 
+const MODE_ORDER: GameMode[] = ["nba", "cbb", "nfl", "cfb"];
+const MODE_META: Record<GameMode, { label: string; color: string; glow: string }> = {
+  nba: { label: "🏀 NBA", color: "var(--gold)", glow: "rgba(255,45,120,0.35)" },
+  cbb: { label: "🏀 CBB", color: "var(--accent)", glow: "rgba(0,229,255,0.3)" },
+  nfl: { label: "🏈 NFL", color: "#FF8A3D", glow: "rgba(255,138,61,0.35)" },
+  cfb: { label: "🏈 CFB", color: "#3DDC97", glow: "rgba(61,220,151,0.32)" },
+};
+const MODE_TAGLINE: Record<GameMode, string> = {
+  nba: "NBA Draft Auction",
+  cbb: "College Hoops Auction",
+  nfl: "NFL Draft Auction",
+  cfb: "College Football Auction",
+};
+
 export function LobbyPage() {
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>("create");
@@ -74,7 +88,7 @@ export function LobbyPage() {
             <div style={s.logoText}>Highest Bid</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            <div style={s.tagline}>NBA Draft Auction</div>
+            <div style={s.tagline}>{MODE_TAGLINE[gameMode]}</div>
             <button
               onClick={() => setShowSlides(true)}
               style={{ fontSize: 11, color: "var(--white-dim)", background: "none", border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px", letterSpacing: "0.04em", opacity: 0.7 }}
@@ -89,28 +103,27 @@ export function LobbyPage() {
         ) : (
         <div style={s.card}>
           {/* Mode picker */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            {(["nba", "cbb"] as GameMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setGameMode(m)}
-                style={{
-                  flex: 1, padding: "8px 12px", borderRadius: 8, border: "none",
-                  fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700,
-                  letterSpacing: "0.04em", cursor: "pointer",
-                  background: gameMode === m
-                    ? m === "nba" ? "var(--gold)" : "var(--accent)"
-                    : "var(--court-mid)",
-                  color: gameMode === m ? "#fff" : "var(--white-dim)",
-                  boxShadow: gameMode === m
-                    ? `0 0 16px ${m === "nba" ? "rgba(255,45,120,0.35)" : "rgba(0,229,255,0.3)"}`
-                    : "none",
-                  transition: "all 180ms ease",
-                }}
-              >
-                {m === "nba" ? "🏀 NBA" : "🎓 College"}
-              </button>
-            ))}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+            {MODE_ORDER.map(m => {
+              const active = gameMode === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => setGameMode(m)}
+                  style={{
+                    flex: "1 1 45%", padding: "8px 12px", borderRadius: 8, border: "none",
+                    fontFamily: "var(--font-d)", fontSize: 13, fontWeight: 700,
+                    letterSpacing: "0.04em", cursor: "pointer",
+                    background: active ? MODE_META[m].color : "var(--court-mid)",
+                    color: active ? "#fff" : "var(--white-dim)",
+                    boxShadow: active ? `0 0 16px ${MODE_META[m].glow}` : "none",
+                    transition: "all 180ms ease",
+                  }}
+                >
+                  {MODE_META[m].label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Tabs */}

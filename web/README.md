@@ -4,10 +4,10 @@ A 2-player sealed-bid NBA draft game. Each player gets $20 to build the best sta
 
 ## Tech Stack
 
-- **Frontend**: React + TanStack Router (hash routing, SPA)
-- **Backend**: Cloudflare Worker (REST API)
+- **Framework**: TanStack Start (React) — client routes + server (API) routes in one app
+- **Backend**: TanStack Start server routes under `src/routes/api/*` (no separate Worker)
 - **Database**: Cloudflare D1 (SQLite at the edge)
-- **Build**: Vite
+- **Build / Deploy**: Vite + `@cloudflare/vite-plugin`, deployed as a single Cloudflare Worker
 
 ---
 
@@ -30,16 +30,18 @@ A 2-player sealed-bid NBA draft game. Each player gets $20 to build the best sta
 # Install deps
 npm install
 
-# Run the frontend dev server
+# Set up the local D1 database (first run only)
+npm run db:migrate:local
+
+# Run the app — client + API on a single dev server
 npm run dev
 # → http://localhost:5173
-
-# Run the Cloudflare Worker locally (optional — game works without it)
-npm run worker:dev
 ```
 
-The game stores state in `sessionStorage`, so D1 is optional for local play.
-The Worker adds cloud persistence so games can be resumed or shared.
+`vite dev` runs both the React client and the `/api/*` server routes in the local
+Cloudflare runtime, with the D1 binding wired up automatically — no second process.
+Local-only games still work without D1 (state is kept in `localStorage`); the API
+adds cloud persistence so games can be resumed or shared.
 
 ---
 
@@ -49,47 +51,26 @@ The Worker adds cloud persistence so games can be resumed or shared.
 
 ```bash
 npm run db:create
-# Copy the database_id from output
+# Copy the database_id from output into wrangler.jsonc
 ```
 
-### 2. Update wrangler.toml
-
-Replace `YOUR_DATABASE_ID_HERE` with the ID from above.
-
-### 3. Run the migration
+### 2. Run the migration against production D1
 
 ```bash
-npm run db:migrate:local   # test locally first
-npm run db:migrate:remote  # push to production D1
+npm run db:migrate:remote
 ```
 
-### 4. Deploy the Worker
+### 3. Build and deploy
 
 ```bash
-npm run worker:deploy
+npm run deploy   # vite build && wrangler deploy
 ```
 
-Copy the deployed Worker URL, for example:
+This builds the client + server and deploys a single Worker (API + static assets)
+to `https://highest-bid.<your-subdomain>.workers.dev`.
 
-```text
-https://highest-bid-worker.<your-subdomain>.workers.dev
-```
-
-### 5. Deploy the Frontend
-
-```bash
-# Point the frontend to your deployed Worker API
-export VITE_API_BASE="https://highest-bid-worker.<your-subdomain>.workers.dev/api"
-
-npm run build
-# Upload dist/ to Cloudflare Pages, Vercel, Netlify, etc.
-
-# Or deploy to Cloudflare Pages:
-npx wrangler pages deploy dist --project-name=highest-bid
-```
-
-If you deploy via the Cloudflare Pages dashboard, add `VITE_API_BASE` as a Pages environment variable
-in both Preview and Production, then trigger a new deployment.
+> The mobile app talks to this API cross-origin via `EXPO_PUBLIC_API_BASE`
+> (`https://<host>/api`); CORS is handled in `src/lib/server.ts`.
 
 ---
 
@@ -99,32 +80,41 @@ in both Preview and Production, then trigger a new deployment.
 highest-bid/
 ├── src/
 │   ├── lib/
-│   │   ├── players.ts      # 50 NBA player pool with stats
-│   │   └── game.ts         # Game state machine (pure functions)
-│   ├── components/
-│   │   ├── PlayerCard.tsx  # Animated player reveal card
-│   │   └── RosterPanel.tsx # Live roster sidebar
-│   ├── pages/
-│   │   ├── LobbyPage.tsx   # Name entry + rules
-│   │   ├── GamePage.tsx    # Main auction UI
-│   │   └── ResultsPage.tsx # Final roster comparison
-│   ├── main.tsx            # Router setup
+│   │   ├── players.ts      # NBA/CBB player pools with stats
+│   │   ├── game.ts         # Game state machine (pure, shared client + server)
+│   │   ├── api.ts          # Client-side API/localStorage wrapper
+│   │   └── server.ts       # Server-only helpers (D1, CORS, JSON)
+│   ├── components/         # PlayerCard, RosterPanel, etc.
+│   ├── pages/              # LobbyPage / GamePage / ResultsPage (rendered by routes)
+│   ├── routes/
+│   │   ├── __root.tsx      # Document shell (head, fonts, analytics)
+│   │   ├── index.tsx       # /            → Lobby
+│   │   ├── game.$gameId.tsx
+│   │   ├── results.$gameId.tsx
+│   │   └── api/            # Server (API) routes — the old Worker, file-based
+│   │       ├── games.ts            # POST /api/games
+│   │       ├── games.join.ts       # POST /api/games/join
+│   │       └── games.$gameId.*.ts  # GET poll, raise, pass, advance, assign-slot
+│   ├── router.tsx          # Router factory (getRouter)
 │   └── index.css           # Global styles / tokens
-├── worker/
-│   └── index.ts            # Cloudflare Worker API
-├── migrations/
-│   └── 001_init.sql        # D1 schema
-├── wrangler.toml           # Cloudflare config
-└── vite.config.ts
+├── migrations/             # D1 schema
+├── wrangler.jsonc          # Cloudflare config (D1 binding)
+└── vite.config.ts          # Vite + TanStack Start + Cloudflare plugins
 ```
 
 ---
 
-## Worker API
+## API
 
-| Method | Path                     | Description            |
-|--------|--------------------------|------------------------|
-| POST   | `/api/games`             | Create game            |
-| GET    | `/api/games/:id`         | Load game state        |
-| PUT    | `/api/games/:id`         | Save game state        |
-| POST   | `/api/games/:id/log`     | Append auction log entry |
+All endpoints live under `src/routes/api/` as TanStack Start server routes and are
+backed by Cloudflare D1. CORS is enabled for the mobile client.
+
+| Method | Path                          | Description                          |
+|--------|-------------------------------|--------------------------------------|
+| POST   | `/api/games`                  | Create a game (Player 1)             |
+| POST   | `/api/games/join`             | Join a game (Player 2)               |
+| GET    | `/api/games/:id`              | Poll game state                      |
+| POST   | `/api/games/:id/raise`        | Raise the current bid                |
+| POST   | `/api/games/:id/pass`         | Pass                                 |
+| POST   | `/api/games/:id/assign-slot`  | Winner chooses a lineup slot         |
+| POST   | `/api/games/:id/advance`      | Advance to the next round            |

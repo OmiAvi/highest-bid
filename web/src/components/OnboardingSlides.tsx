@@ -22,7 +22,7 @@ const SPIN_PLAYERS: PlayerDef[] = [
 const WINNER = SPIN_PLAYERS[1]; // Stephen Curry — controlled landing
 const FINAL_BID = 7;
 const POSITIONS_LIST: Position[] = ["PG", "SG", "SF", "PF", "C"];
-const POS_LABELS: Record<Position, string> = {
+const POS_LABELS: Record<string, string> = {
   PG: "Point Guard", SG: "Shooting Guard", SF: "Small Forward", PF: "Power Forward", C: "Center",
 };
 

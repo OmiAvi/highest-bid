@@ -24,22 +24,34 @@ export function PlayerAvatar({ name, position, size, radius, style }: Props) {
   const info = getPlayerHeadshot(name, position);
   const borderRadius = radius ?? Math.round(size * 0.28);
 
-  // Derived "failed" so it auto-resets when the uri changes (recycled rows),
-  // without a reset effect.
-  const [failedUri, setFailedUri] = useState<string | null>(null);
-  const showImage = info.uri !== null && failedUri !== info.uri;
+  // Per-uri load state, reset during render when the uri changes (recycled rows)
+  // so a row never inherits a previous player's retry/failure — no reset effect.
+  const [load, setLoad] = useState({ uri: info.uri, attempt: 0, failed: false });
+  if (load.uri !== info.uri) setLoad({ uri: info.uri, attempt: 0, failed: false });
+
+  // Dev networking (e.g. OkHttp connection reuse over `adb reverse`) can drop a
+  // headshot mid-load; retry a couple times on a fresh request before falling
+  // back to initials.
+  const MAX_RETRIES = 2;
+  const showImage = info.uri !== null && !load.failed;
 
   return (
     <View style={[styles.frame, { width: size, height: size, borderRadius }, style]}>
       {showImage ? (
         <Image
+          key={`${info.uri}-${load.attempt}`}
           source={{ uri: info.uri! }}
           style={{ width: size, height: size }}
           contentFit="cover"
           transition={150}
           cachePolicy="memory-disk"
-          recyclingKey={info.uri}
-          onError={() => setFailedUri(info.uri)}
+          recyclingKey={`${info.uri}-${load.attempt}`}
+          onError={(e) => {
+            if (__DEV__) console.log(`[PlayerAvatar] image failed (attempt ${load.attempt + 1}): ${info.uri} — ${e?.error ?? "unknown"}`);
+            setLoad((s) =>
+              s.attempt < MAX_RETRIES ? { ...s, attempt: s.attempt + 1 } : { ...s, failed: true }
+            );
+          }}
         />
       ) : (
         <View style={[styles.fallback, { width: size, height: size, backgroundColor: info.primary }]}>

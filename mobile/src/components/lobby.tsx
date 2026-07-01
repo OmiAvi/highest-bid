@@ -23,6 +23,20 @@ import { Palette, Fonts, Spacing, Radius } from "@/constants/theme";
 type Tab = "create" | "join" | "local";
 const ONBOARDING_KEY = "hb_seen_onboarding";
 
+const MODE_ORDER: GameMode[] = ["nba", "cbb", "nfl", "cfb"];
+const MODE_META: Record<GameMode, { label: string; color: string }> = {
+  nba: { label: "🏀 NBA", color: Palette.gold },
+  cbb: { label: "🏀 CBB", color: Palette.accent },
+  nfl: { label: "🏈 NFL", color: "#FF8A3D" },
+  cfb: { label: "🏈 CFB", color: "#3DDC97" },
+};
+const MODE_TAGLINE: Record<GameMode, string> = {
+  nba: "NBA Draft Auction",
+  cbb: "College Hoops Auction",
+  nfl: "NFL Draft Auction",
+  cfb: "College Football Auction",
+};
+
 /**
  * The interactive lobby (create / join / same-device) — extracted from the
  * index route so it can be rendered both behind the arcade cabinet's screen
@@ -119,7 +133,7 @@ export function Lobby() {
               <Text style={styles.logoText}>Highest Bid</Text>
             </View>
             <View style={styles.taglineRow}>
-              <Text style={styles.tagline}>NBA Draft Auction</Text>
+              <Text style={styles.tagline}>{MODE_TAGLINE[gameMode]}</Text>
               <Pressable style={styles.howToBtn} onPress={() => setShowSlides(true)}>
                 <Text style={styles.howToText}>How to play</Text>
               </Pressable>
@@ -132,7 +146,7 @@ export function Lobby() {
             <View style={styles.card}>
               {/* Mode picker */}
               <View style={styles.modeRow}>
-                {(["nba", "cbb"] as GameMode[]).map((m) => {
+                {MODE_ORDER.map((m) => {
                   const active = gameMode === m;
                   return (
                     <Pressable
@@ -140,13 +154,11 @@ export function Lobby() {
                       onPress={() => setGameMode(m)}
                       style={[
                         styles.modeBtn,
-                        {
-                          backgroundColor: active ? (m === "nba" ? Palette.gold : Palette.accent) : Palette.courtMid,
-                        },
+                        { backgroundColor: active ? MODE_META[m].color : Palette.courtMid },
                       ]}
                     >
                       <Text style={[styles.modeText, { color: active ? "#fff" : Palette.whiteDim }]}>
-                        {m === "nba" ? "🏀 NBA" : "🎓 College"}
+                        {MODE_META[m].label}
                       </Text>
                     </Pressable>
                   );
@@ -305,8 +317,8 @@ const styles = StyleSheet.create({
   logoText: { fontFamily: Fonts.display, fontSize: 44, fontWeight: "800", color: Palette.white, letterSpacing: -1.3 },
   taglineRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two + 2 },
   tagline: { fontSize: 18, color: Palette.whiteDim, fontWeight: "500" },
-  howToBtn: { borderWidth: 1, borderColor: Palette.border, borderRadius: 20, paddingHorizontal: Spacing.three, paddingVertical: 3, opacity: 0.75 },
-  howToText: { fontSize: 11, color: Palette.whiteDim, letterSpacing: 0.4 },
+  howToBtn: { borderWidth: 1, borderColor: Palette.borderStrong, borderRadius: 20, paddingHorizontal: Spacing.three + 2, paddingVertical: Spacing.two - 1, opacity: 0.95 },
+  howToText: { fontSize: 14, fontWeight: "600", color: Palette.whiteDim, letterSpacing: 0.4 },
 
   card: {
     backgroundColor: Palette.courtSurface,
@@ -315,8 +327,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: Spacing.four,
   },
-  modeRow: { flexDirection: "row", gap: Spacing.two, marginBottom: Spacing.three },
-  modeBtn: { flex: 1, paddingVertical: Spacing.two + 2, borderRadius: Radius.md, alignItems: "center" },
+  modeRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.two, marginBottom: Spacing.three },
+  modeBtn: { flexGrow: 1, flexBasis: "47%", paddingVertical: Spacing.two + 2, borderRadius: Radius.md, alignItems: "center" },
   modeText: { fontFamily: Fonts.display, fontSize: 13, fontWeight: "700", letterSpacing: 0.5 },
 
   tabs: { flexDirection: "row", gap: 2, marginBottom: Spacing.four, backgroundColor: Palette.courtMid, borderRadius: Radius.md, padding: 3 },
