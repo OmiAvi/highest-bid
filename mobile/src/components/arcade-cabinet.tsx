@@ -35,8 +35,8 @@ export interface CabinetGeometry {
 }
 
 // Cabinet sizing
-const CAB_WIDTH_FRAC = 0.86; // of viewport width
-const CAB_MAX_WIDTH = 440;
+const CAB_WIDTH_FRAC = 0.96; // of viewport width
+const CAB_MAX_WIDTH = 520;
 const CAB_ASPECT = 100 / 156; // viewBox w/h — the cabinet is tall
 
 // Screen cutout as fractions of the cabinet box (must match the SVG viewBox below)
@@ -51,7 +51,7 @@ const START_FRAC = { x: 0.26, y: 0.85, w: 0.48, h: 0.062 } as const;
  * into the screen cutout and zoomed out of it.
  */
 export function cabinetGeometry(vw: number, vh: number, insets: EdgeInsets): CabinetGeometry {
-  const availH = vh - insets.top - insets.bottom - 16;
+  const availH = vh - insets.top - insets.bottom - 8;
   let w = Math.min(vw * CAB_WIDTH_FRAC, CAB_MAX_WIDTH);
   let h = w / CAB_ASPECT;
   if (h > availH) {

@@ -305,8 +305,8 @@ const styles = StyleSheet.create({
   logoText: { fontFamily: Fonts.display, fontSize: 44, fontWeight: "800", color: Palette.white, letterSpacing: -1.3 },
   taglineRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two + 2 },
   tagline: { fontSize: 18, color: Palette.whiteDim, fontWeight: "500" },
-  howToBtn: { borderWidth: 1, borderColor: Palette.border, borderRadius: 20, paddingHorizontal: Spacing.three, paddingVertical: 3, opacity: 0.75 },
-  howToText: { fontSize: 11, color: Palette.whiteDim, letterSpacing: 0.4 },
+  howToBtn: { borderWidth: 1, borderColor: Palette.borderStrong, borderRadius: 20, paddingHorizontal: Spacing.three + 2, paddingVertical: Spacing.two - 1, opacity: 0.95 },
+  howToText: { fontSize: 14, fontWeight: "600", color: Palette.whiteDim, letterSpacing: 0.4 },
 
   card: {
     backgroundColor: Palette.courtSurface,

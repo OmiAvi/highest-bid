@@ -224,8 +224,8 @@ export function OnboardingSlides({ onDone }: { onDone: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  skip: { position: "absolute", top: -26, right: 0, padding: 4, opacity: 0.55, zIndex: 2 },
-  skipText: { fontSize: 11, color: Palette.whiteDim, letterSpacing: 0.5 },
+  skip: { position: "absolute", top: -34, right: 0, paddingVertical: 6, paddingHorizontal: 10, opacity: 0.9, zIndex: 2 },
+  skipText: { fontSize: 15, fontWeight: "600", color: Palette.whiteDim, letterSpacing: 0.5 },
   dots: { flexDirection: "row", justifyContent: "center", gap: 5, marginBottom: Spacing.three },
   dot: { height: 4, width: 6, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.14)" },
   dotActive: { width: 20, backgroundColor: Palette.gold },
